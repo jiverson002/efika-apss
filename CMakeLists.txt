@@ -1,21 +1,9 @@
 cmake_minimum_required(VERSION 3.10)
 
 #-------------------------------------------------------------------------------
-# BOOTSTRAP w/ latest bootstrap/cmake scripts
+# BOOTSTRAP
 #-------------------------------------------------------------------------------
-include(FetchContent)
-FetchContent_Declare(cmake
-  GIT_REPOSITORY git@github.com:jiverson002/bootstrap-cmake.git
-)
-FetchContent_MakeAvailable(cmake)
-
-#-------------------------------------------------------------------------------
-# Import dependencies
-#-------------------------------------------------------------------------------
-set(core_GIT_REPOSITORY git@github.com:jiverson002/efika-core.git)
-set(data_GIT_REPOSITORY git@github.com:jiverson002/efika-data.git)
-
-import(core data)
+include(${CMAKE_CURRENT_LIST_DIR}/cmake/Bootstrap.cmake)
 
 #-------------------------------------------------------------------------------
 # SUBPROJECT configuration
@@ -24,6 +12,12 @@ project(${BS_PROJECT_NAME}-impl LANGUAGES C CXX)
 
 cmake_policy(SET CMP0076 NEW)
 cmake_policy(SET CMP0079 NEW)
+
+#-------------------------------------------------------------------------------
+# Require C99/C++17 support from compiler
+#-------------------------------------------------------------------------------
+c_99()
+cxx_17()
 
 #-------------------------------------------------------------------------------
 # LIBRARY configuration
@@ -38,11 +32,6 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 target_link_libraries(${BS_PROJECT_NAME} INTERFACE ${PROJECT_NAME})
 
 add_subdirectory(src)
-
-#-------------------------------------------------------------------------------
-# Require C++17 support from compiler for tests
-#-------------------------------------------------------------------------------
-cxx_17()
 
 #-------------------------------------------------------------------------------
 # ...
