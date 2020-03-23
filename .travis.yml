@@ -1,3 +1,5 @@
+language: cpp
+
 # Branch whitelist.
 branches:
   only:
