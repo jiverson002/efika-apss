@@ -1,0 +1,20 @@
+# Branch whitelist.
+branches:
+  only:
+    - master
+
+# Choose operating systems.
+os:
+  - linux
+  - osx
+
+# Choose compilers.
+compiler:
+  - clang
+  - gcc
+
+# Override default script.
+script:
+  - cmake .
+  - cmake --build .
+  - ctest --output-on-failure
