@@ -56,8 +56,8 @@ static inline void vector_delete(Vector * const v) {
 extern "C" {
 #endif
 
-void sfr1d(Problem const P, Vector * const A);
-void sfrkd(Problem const P, Vector * const A);
+void EFIKA_Impl_sfr1d(Problem const P, Vector * const A);
+void EFIKA_Impl_sfrkd(Problem const P, Vector * const A);
 
 #ifdef __cplusplus
 }

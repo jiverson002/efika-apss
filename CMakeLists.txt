@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.13)
 
 #-------------------------------------------------------------------------------
 # BOOTSTRAP
@@ -20,16 +20,21 @@ c_99()
 cxx_17()
 
 #-------------------------------------------------------------------------------
-# LIBRARY configuration
+# SUBLIBRARY configuration
 #-------------------------------------------------------------------------------
 add_library(${PROJECT_NAME})
+
+target_link_libraries(${BS_PROJECT_NAME} INTERFACE ${PROJECT_NAME})
 
 target_include_directories(${PROJECT_NAME} PUBLIC
   $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(${BS_PROJECT_NAME} INTERFACE ${PROJECT_NAME})
+target_include_directories(${PROJECT_NAME} PRIVATE
+  $<TARGET_PROPERTY:${BS_PROJECT_NAME}-core,INCLUDE_DIRECTORIES>
+  $<TARGET_PROPERTY:${BS_PROJECT_NAME}-io,INCLUDE_DIRECTORIES>
+)
 
 add_subdirectory(src)
 

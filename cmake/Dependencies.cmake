@@ -8,4 +8,9 @@ FetchContent_Declare(
   GIT_REPOSITORY git@github.com:jiverson002/efika-data.git
 )
 
-FetchContent_MakeAvailable(efika-core efika-data)
+FetchContent_Declare(
+  efika-io
+  GIT_REPOSITORY git@github.com:jiverson002/efika-io.git
+)
+
+FetchContent_MakeAvailable(efika-core efika-data efika-io)

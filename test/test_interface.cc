@@ -10,20 +10,20 @@
 
 #include <gtest/gtest.h>
 
-#include "efika/data/path.h"
-#include "efika/impl/sfr.h"
+#include "efika/data.h"
+#include "efika/impl.h"
 
 namespace impl {
 
 struct sfr1d {
   void operator()(Problem const P, Vector * const A) {
-    ::sfr1d(P, A);
+    EFIKA_Impl_sfr1d(P, A);
   }
 };
 
 struct sfrkd {
   void operator()(Problem const P, Vector * const A) {
-    ::sfrkd(P, A);
+    EFIKA_Impl_sfrkd(P, A);
   }
 };
 
@@ -92,15 +92,15 @@ class interface : public ::testing::Test {
 int main(int argc, char *argv[]) {
   ::testing::InitGoogleTest(&argc, argv);
 
-  auto ndatasets = sizeof(datasets) / sizeof(*datasets);
+  auto ndatasets = sizeof(EFIKA_datasets) / sizeof(*EFIKA_datasets);
 
   for(decltype(ndatasets) i = 0; i < ndatasets; i++) {
     ::testing::RegisterTest(
-      "interface", ("sfrkd." + std::string(datasets[i])).c_str(),
+      "interface", ("sfrkd." + std::string(EFIKA_datasets[i])).c_str(),
       nullptr, nullptr, __FILE__, __LINE__,
       [=]() -> ::testing::Test* {
         return new interface<impl::sfrkd>(0.10,
-            std::string(EFIKA_DATA_PATH) + "/" + std::string(datasets[i]));
+            std::string(EFIKA_DATA_PATH) + "/" + std::string(EFIKA_datasets[i]));
       });
   }
 
