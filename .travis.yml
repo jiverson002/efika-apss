@@ -28,9 +28,9 @@ compiler:
 # XXX: HACK to select the correct CMake/CTest binary.
 before_script:
   - if [[ $TRAVIS_OS_NAME == "linux" ]]; then
-      export CMAKE=/usr/bin/cmake; export CTEST=/usr/bin/ctest
+      export CMAKE=/usr/bin/cmake; export CTEST=/usr/bin/ctest;
     else
-      export CMAKE=cmake; export CTEST=ctest
+      export CMAKE=cmake; export CTEST=ctest;
     fi
 
 # Override default script.
