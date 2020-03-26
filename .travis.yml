@@ -25,6 +25,14 @@ compiler:
   - clang
   - gcc
 
+# XXX: HACK to select the correct CMake/CTest binary.
+before_script:
+  - if [[ $TRAVIS_OS_NAME == "linux" ]]; then
+      export CMAKE=/usr/bin/cmake; export CTEST=/usr/bin/ctest
+    else
+      export CMAKE=cmake; export CTEST=ctest
+    fi
+
 # Override default script.
 script:
-  - /usr/bin/cmake . && /usr/bin/cmake --build . && /usr/bin/ctest --output-on-failure
+  - $CMAKE . && $CMAKE --build . && $CTEST --output-on-failure
