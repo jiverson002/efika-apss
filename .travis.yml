@@ -1,5 +1,7 @@
 language: cpp
 
+dist: xenial
+
 # Branch whitelist.
 branches:
   only:
@@ -8,7 +10,7 @@ branches:
 addons:
   apt:
     sources:
-    - sourceline: "deb https://apt.kitware.com/ubuntu/ $TRAVIS_DIST main"
+    - sourceline: "deb https://apt.kitware.com/ubuntu/ xenial main"
       key_url: 'https://apt.kitware.com/keys/kitware-archive-latest.asc'
     packages:
     - cmake
@@ -25,4 +27,4 @@ compiler:
 
 # Override default script.
 script:
-  - cmake . && cmake --build . && ctest --output-on-failure
+  - /usr/bin/cmake . && /usr/bin/cmake --build . && /usr/bin/ctest --output-on-failure

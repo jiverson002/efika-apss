@@ -45,4 +45,4 @@ endforeach()
 
 # ...
 gtest_discover_tests( ${PROJECT_NAME}-tests
-  PROPERTIES TIMEOUT 20 )
+  PROPERTIES TIMEOUT 120 )
