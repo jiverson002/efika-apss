@@ -5,6 +5,14 @@ branches:
   only:
     - master
 
+addons:
+  apt:
+    sources:
+    - sourceline: "deb https://apt.kitware.com/ubuntu/ $TRAVIS_DIST main"
+      key_url: 'https://apt.kitware.com/keys/kitware-archive-latest.asc'
+    packages:
+    - cmake
+
 # Choose operating systems.
 os:
   - linux
@@ -17,6 +25,4 @@ compiler:
 
 # Override default script.
 script:
-  - cmake .
-  - cmake --build .
-  - ctest --output-on-failure
+  - cmake . && cmake --build . && ctest --output-on-failure
