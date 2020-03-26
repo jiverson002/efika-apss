@@ -1,53 +1,56 @@
-cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required( VERSION 3.10 )
+
+# Subproject of efika
+project( efika-impl )
+
+# Always use '-fPIC'/'-fPIE' option.
+set( CMAKE_POSITION_INDEPENDENT_CODE ON )
+
+# Require C99 compliance from compiler
+set( CMAKE_C_STANDARD 99 )
+set( CMAKE_C_STANDARD_REQUIRED ON )
+set( CMAKE_C_EXTENSIONS OFF )
 
 #-------------------------------------------------------------------------------
-# BOOTSTRAP
+# COMPONENT configuration
 #-------------------------------------------------------------------------------
-include(${CMAKE_CURRENT_LIST_DIR}/cmake/Bootstrap.cmake)
+add_library( ${PROJECT_NAME} )
+add_library( ${PROJECT_NAME}-friend INTERFACE )
+
+target_sources( ${PROJECT_NAME}
+  PRIVATE src/sfr.c )
+
+target_include_directories( ${PROJECT_NAME}
+  PUBLIC  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+          $<INSTALL_INTERFACE:include>
+  PRIVATE src/include )
+
+target_include_directories( ${PROJECT_NAME}-friend
+  INTERFACE src/include )
+
+add_library( Efika::impl        ALIAS ${PROJECT_NAME} )
+add_library( Efika::impl-friend ALIAS ${PROJECT_NAME}-friend )
 
 #-------------------------------------------------------------------------------
-# SUBPROJECT configuration
+# Declare efika dependencies
 #-------------------------------------------------------------------------------
-project(${BS_PROJECT_NAME}-impl LANGUAGES C CXX)
+include( FetchContent )
 
-cmake_policy(SET CMP0076 NEW)
-cmake_policy(SET CMP0079 NEW)
+foreach( dep core )
+  FetchContent_Declare( efika-${dep}
+    GIT_REPOSITORY git@github.com:jiverson002/efika-${dep}.git )
+  FetchContent_MakeAvailable( efika-${dep} )
 
-#-------------------------------------------------------------------------------
-# Require C99/C++17 support from compiler
-#-------------------------------------------------------------------------------
-c_99()
-cxx_17()
-
-#-------------------------------------------------------------------------------
-# SUBLIBRARY configuration
-#-------------------------------------------------------------------------------
-add_library(${PROJECT_NAME})
-
-target_link_libraries(${BS_PROJECT_NAME} INTERFACE ${PROJECT_NAME})
-
-target_include_directories(${PROJECT_NAME} PUBLIC
-  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
-
-target_include_directories(${PROJECT_NAME} PRIVATE
-  $<TARGET_PROPERTY:${BS_PROJECT_NAME}-core,INCLUDE_DIRECTORIES>
-  $<TARGET_PROPERTY:${BS_PROJECT_NAME}-io,INCLUDE_DIRECTORIES>
-)
-
-add_subdirectory(src)
-
-#-------------------------------------------------------------------------------
-# ...
-#-------------------------------------------------------------------------------
-if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
-  include(BSTest)
-endif()
+  target_link_libraries( ${PROJECT_NAME} PUBLIC  Efika::${dep} )
+  target_link_libraries( ${PROJECT_NAME} PRIVATE Efika::${dep}-friend )
+endforeach()
 
 #-------------------------------------------------------------------------------
 # Unit test configuration
 #-------------------------------------------------------------------------------
-if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND BUILD_TESTING)
-  add_subdirectory(test)
+if( CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME )
+  include( CTest )
+endif()
+if( CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND BUILD_TESTING )
+  add_subdirectory( test )
 endif()

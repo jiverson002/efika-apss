@@ -1,14 +1,48 @@
-# Build tests executable
-add_executable(${PROJECT_NAME}-tests
-  test_interface.cc
-)
+# Require C++17 compliance from compiler
+set( CMAKE_CXX_STANDARD 17 )
+set( CMAKE_CXX_STANDARD_REQUIRED ON )
+set( CMAKE_CXX_EXTENSIONS OFF )
+
+include( FetchContent )
+include( GoogleTest )
+
+#-------------------------------------------------------------------------------
+# GoogleTest configuration
+#-------------------------------------------------------------------------------
+option(BENCHMARK_ENABLE_TESTING OFF)
+option(BUILD_GMOCK              OFF)
+
+FetchContent_Declare( googletest
+  GIT_REPOSITORY https://github.com/google/googletest.git )
+
+FetchContent_MakeAvailable( googletest )
+
+set_target_properties( gtest_main
+  PROPERTIES EXCLUDE_FROM_ALL 1 EXCLUDE_FROM_DEFAULT_BUILD 1 )
+
+#-------------------------------------------------------------------------------
+# EXECUTABLE configuration
+#-------------------------------------------------------------------------------
+add_executable( ${PROJECT_NAME}-tests )
+
+target_sources( ${PROJECT_NAME}-tests
+  PRIVATE test_interface.cc )
+
+target_link_libraries( ${PROJECT_NAME}-tests
+  PRIVATE gtest ${PROJECT_NAME} )
+
+#-------------------------------------------------------------------------------
+# Declare efika dependencies
+#-------------------------------------------------------------------------------
+foreach( dep data io )
+  FetchContent_Declare( efika-${dep}
+    GIT_REPOSITORY git@github.com:jiverson002/efika-${dep}.git )
+
+  FetchContent_MakeAvailable( efika-${dep} )
+
+  target_link_libraries( ${PROJECT_NAME}-tests PRIVATE Efika::${dep} )
+endforeach()
 
 # ...
-target_link_libraries(${PROJECT_NAME}-tests
-  ${BS_PROJECT_NAME}
-)
-
-# Discover tests.
-project_add_tests(${PROJECT_NAME}-tests
-  PROPERTIES TIMEOUT 20
-)
+gtest_discover_tests( ${PROJECT_NAME}-tests
+  PROPERTIES TIMEOUT 20 )
