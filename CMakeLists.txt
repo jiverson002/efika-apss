@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.14)
 project(efika-impl)
 
 # Include build configurations (compiler standards, options, etc.)
-if (EFIKA_BUILDCONFIG_FILE)
+if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND EFIKA_BUILDCONFIG_FILE)
   include(${EFIKA_BUILDCONFIG_FILE})
 endif()
 
