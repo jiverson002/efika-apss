@@ -34,8 +34,8 @@ typedef struct hyperplane {
 
 
 static inline float dist(Problem const P, unsigned const p0, unsigned const p1) {
-  unsigned const k            = P.k;
-  float const (*const mem)[5] = P.mem;
+  unsigned const k      = P.k;
+  float (*const mem)[5] = P.mem;
 
   float sum = 0.0;
   for (unsigned i = 0; i < k; i++) {
@@ -46,10 +46,10 @@ static inline float dist(Problem const P, unsigned const p0, unsigned const p1) 
 }
 
 static inline Hyperplane select_hyperplane(Problem const P, Subproblem const SP) {
-  float const (*const mem)[5] = P.mem;
-  unsigned const n            = SP.n;
-  unsigned const * const m    = SP.m;
-  View const * const V        = SP.V;
+  float (*const mem)[5]    = P.mem;
+  unsigned const n         = SP.n;
+  unsigned const * const m = SP.m;
+  View const * const V     = SP.V;
 
   unsigned const hp = (unsigned)rand() % SP.k;
   unsigned const cn = 1 + ((n - 1) / 2);
@@ -60,11 +60,11 @@ static int sfrkd_2(Hyperplane const HP, Problem const P, Subproblem const SP, Sc
 
 static int sfr1d_1(Problem const P, Subproblem const SP, Vector * const A) {
   /* unpack... */
-  float const t               = P.t;
-  float const (*const mem)[5] = P.mem;
-  unsigned const n            = SP.n;
-  unsigned const * const m    = SP.m;
-  View const * const V        = SP.V;
+  float const t            = P.t;
+  float (*const mem)[5]    = P.mem;
+  unsigned const n         = SP.n;
+  unsigned const * const m = SP.m;
+  View const * const V     = SP.V;
 
   if (0 == n)
     return 0;
@@ -172,17 +172,17 @@ static int sfrkd_2(Hyperplane const HP, Problem const P, Subproblem const SP, Sc
   int ret;
 
   /* unpack... */
-  float const l               = HP.l ;
-  unsigned const ln           = HP.ln;
-  unsigned const dim          = HP.dim;
-  float const t               = P.t;
-  float const (*const mem)[5] = P.mem;
-  unsigned const k            = SP.k;
-  unsigned const n            = SP.n;
-  unsigned const * const m    = SP.m;
-  View const * const V        = SP.V;
-  bool * const subp           = SS.subp;
-  View * const scratch        = SS.scratch;
+  float const l            = HP.l ;
+  unsigned const ln        = HP.ln;
+  unsigned const dim       = HP.dim;
+  float const t            = P.t;
+  float (*const mem)[5]    = P.mem;
+  unsigned const k         = SP.k;
+  unsigned const n         = SP.n;
+  unsigned const * const m = SP.m;
+  View const * const V     = SP.V;
+  bool * const subp        = SS.subp;
+  View * const scratch     = SS.scratch;
 
   /* mark all the points for which |x-l| <= t */
   unsigned sn = 0;
@@ -306,7 +306,7 @@ Impl_sfr1d(Problem const P, Vector * const A) {
   Subproblem SP;
 
   ret = make_subproblem(P, &SP);
-  assert(!ret);
+  assert(!ret); (void)ret;
 
   sfr1d_1(P, SP, A);
 
@@ -321,9 +321,9 @@ Impl_sfrkd(Problem const P, Vector * const A) {
   ScratchSpace SS;
 
   ret = make_subproblem(P, &SP);
-  assert(!ret);
+  assert(!ret); (void)ret;
   ret = make_scratchspace(P, &SS);
-  assert(!ret);
+  assert(!ret); (void)ret;
 
   sfrkd_1(P, SP, SS, A);
 
