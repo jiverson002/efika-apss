@@ -45,7 +45,11 @@ static inline void vector_push_back(Vector * const v, Solution const s) {
 static inline Vector vector_new(void) {
   Solution *vmem = (Solution*)malloc(1024 * sizeof(Solution));
   assert(vmem);
+#ifdef __cplusplus
+  return { 0, 1024, vmem };
+#else
   return (Vector){ 0, 1024, vmem };
+#endif
 }
 
 static inline void vector_delete(Vector * const v) {

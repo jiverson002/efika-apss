@@ -32,7 +32,8 @@ before_script:
     else
       export CMAKE=cmake; export CTEST=ctest;
     fi
+  - wget https://gist.githubusercontent.com/jiverson002/f5f6db706b69cf0cd0975848bbf5ecb7/raw/dev-buildconfig
 
 # Override default script.
 script:
-  - $CMAKE . && $CMAKE --build . && $CTEST --output-on-failure
+  - $CMAKE -DEFIKA_BUILDCONFIG_FILE=dev-buildconfig . && $CMAKE --build . && $CTEST --output-on-failure

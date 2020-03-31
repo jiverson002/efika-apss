@@ -1,10 +1,16 @@
-# Require C++17 compliance from compiler
-set( CMAKE_CXX_STANDARD 17 )
-set( CMAKE_CXX_STANDARD_REQUIRED ON )
-set( CMAKE_CXX_EXTENSIONS OFF )
+# Include required CMake modules
+include(GoogleTest)
 
-include( FetchContent )
-include( GoogleTest )
+#-------------------------------------------------------------------------------
+# EXECUTABLE configuration
+#-------------------------------------------------------------------------------
+add_executable(${PROJECT_NAME}-tests)
+
+target_sources(${PROJECT_NAME}-tests
+  PRIVATE test_interface.cc)
+
+target_link_libraries(${PROJECT_NAME}-tests
+  PRIVATE gtest ${PROJECT_NAME})
 
 #-------------------------------------------------------------------------------
 # GoogleTest configuration
@@ -12,37 +18,25 @@ include( GoogleTest )
 option(BENCHMARK_ENABLE_TESTING OFF)
 option(BUILD_GMOCK              OFF)
 
-FetchContent_Declare( googletest
-  GIT_REPOSITORY https://github.com/google/googletest.git )
+FetchContent_Declare(googletest
+  GIT_REPOSITORY https://github.com/google/googletest.git)
 
-FetchContent_MakeAvailable( googletest )
+FetchContent_MakeAvailable(googletest)
 
-set_target_properties( gtest_main
-  PROPERTIES EXCLUDE_FROM_ALL 1 EXCLUDE_FROM_DEFAULT_BUILD 1 )
+set_target_properties(gtest_main
+  PROPERTIES EXCLUDE_FROM_ALL 1 EXCLUDE_FROM_DEFAULT_BUILD 1)
 
-#-------------------------------------------------------------------------------
-# EXECUTABLE configuration
-#-------------------------------------------------------------------------------
-add_executable( ${PROJECT_NAME}-tests )
-
-target_sources( ${PROJECT_NAME}-tests
-  PRIVATE test_interface.cc )
-
-target_link_libraries( ${PROJECT_NAME}-tests
-  PRIVATE gtest ${PROJECT_NAME} )
+gtest_discover_tests(${PROJECT_NAME}-tests
+  PROPERTIES TIMEOUT 120)
 
 #-------------------------------------------------------------------------------
 # Declare efika dependencies
 #-------------------------------------------------------------------------------
-foreach( dep data io )
-  FetchContent_Declare( efika-${dep}
-    GIT_REPOSITORY git@github.com:jiverson002/efika-${dep}.git )
+foreach(dep core data io)
+  FetchContent_Declare(efika-${dep}
+    GIT_REPOSITORY git@github.com:jiverson002/efika-${dep}.git)
 
-  FetchContent_MakeAvailable( efika-${dep} )
+  FetchContent_MakeAvailable(efika-${dep})
 
-  target_link_libraries( ${PROJECT_NAME}-tests PRIVATE Efika::${dep} )
+  target_link_libraries(${PROJECT_NAME}-tests PRIVATE Efika::${dep})
 endforeach()
-
-# ...
-gtest_discover_tests( ${PROJECT_NAME}-tests
-  PROPERTIES TIMEOUT 120 )

@@ -5,6 +5,7 @@
 #include <stdlib.h>
 
 #include "efika/core/gc.h"
+#include "efika/impl/export.h"
 #include "efika/impl/rename.h"
 #include "efika/impl.h"
 
@@ -298,7 +299,8 @@ static int make_scratchspace(Problem const P, ScratchSpace * const SS) {
 }
 
 
-void Impl_sfr1d(Problem const P, Vector * const A) {
+EFIKA_IMPL_EXPORT void
+Impl_sfr1d(Problem const P, Vector * const A) {
   int ret;
 
   Subproblem SP;
@@ -312,7 +314,8 @@ void Impl_sfr1d(Problem const P, Vector * const A) {
   free((void*)SP.V);
 }
 
-void Impl_sfrkd(Problem const P, Vector * const A) {
+EFIKA_IMPL_EXPORT void
+Impl_sfrkd(Problem const P, Vector * const A) {
   int ret;
   Subproblem SP;
   ScratchSpace SS;
