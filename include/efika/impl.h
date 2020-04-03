@@ -7,12 +7,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 
-typedef struct problem {
-  float t;
-  unsigned k;
-  unsigned n;
-  float (*mem)[5];
-} Problem;
+#include "efika/core.h"
 
 typedef struct solution {
   unsigned p0;
@@ -60,8 +55,14 @@ static inline void vector_delete(Vector * const v) {
 extern "C" {
 #endif
 
-void EFIKA_Impl_sfr1d(Problem const P, Vector * const A);
-void EFIKA_Impl_sfrkd(Problem const P, Vector * const A);
+int EFIKA_Impl_sfr1d(EFIKA_val_t const minsim,
+                     EFIKA_Matrix const * const M,
+                     EFIKA_Matrix const * const I,
+                     Vector * const A);
+int EFIKA_Impl_sfrkd(EFIKA_val_t const minsim,
+                     EFIKA_Matrix const * const M,
+                     EFIKA_Matrix const * const I,
+                     Vector * const A);
 
 #ifdef __cplusplus
 }

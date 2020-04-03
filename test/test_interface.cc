@@ -11,19 +11,23 @@
 #include <gtest/gtest.h>
 
 #include "efika/data.h"
+#include "efika/core.h"
 #include "efika/impl.h"
+#include "efika/io.h"
 
 namespace impl {
 
 struct sfr1d {
-  void operator()(Problem const P, Vector * const A) {
-    EFIKA_Impl_sfr1d(P, A);
+  int operator()(EFIKA_val_t const minsim, EFIKA_Matrix const * const M,
+                 EFIKA_Matrix const * const I, Vector * const A) {
+    return EFIKA_Impl_sfr1d(minsim, M, I, A);
   }
 };
 
 struct sfrkd {
-  void operator()(Problem const P, Vector * const A) {
-    EFIKA_Impl_sfrkd(P, A);
+  int operator()(EFIKA_val_t const minsim, EFIKA_Matrix const * const M,
+                 EFIKA_Matrix const * const I, Vector * const A) {
+    return EFIKA_Impl_sfrkd(minsim, M, I, A);
   }
 };
 
@@ -35,45 +39,60 @@ template <typename TypeParam>
 class interface : public ::testing::Test {
   public:
     interface(float const t, const std::string &f)
-      : threshold_(t), filename_(f) { }
+      : minsim_(t), filename_(f) { }
 
     void SetUp() override {
-      unsigned n, k;
+      int err;
 
-      std::ifstream file(filename_);
-      if (!file.is_open())
+      err = EFIKA_Matrix_init(&M_);
+      if (err)
+        throw std::runtime_error("Could not initialize matrix");
+
+      FILE * fp = fopen((filename_).c_str(), "r");
+      if (!fp)
         throw std::invalid_argument("Cannot open `" + filename_ + "' for reading");
 
-      file >> n >> k;
-      if (file.fail())
-        throw std::invalid_argument("Cannot read `" + filename_);
+      err = EFIKA_IO_cluto_load(fp, &M_);
+      if (err)
+        throw std::runtime_error("Could not load `" + filename_ + "'");
 
-      mem_ = std::make_unique<float[][5]>(n);
+      fclose(fp);
 
-      for (unsigned i = 0; i < n; i++) {
-        for (unsigned j = 0; j < k; j++) {
-          file >> mem_.get()[i][j];
-          if (file.fail())
-            throw std::invalid_argument("Cannot read `" + filename_);
-        }
-      }
+      err = EFIKA_Matrix_sort(&M_, EFIKA_ASC | EFIKA_COL);
+      if (err)
+        throw std::runtime_error("Could not sort matrix");
 
-      P_ = { threshold_, k, n, mem_.get() };
+      err = EFIKA_Matrix_iidx(&M_, &I_);
+      if (err)
+        throw std::runtime_error("Could not transpose matrix");
+
+      err = EFIKA_Matrix_sort(&I_, EFIKA_ASC | EFIKA_VAL);
+      if (err)
+        throw std::runtime_error("Could not sort matrix");
+    }
+
+    void TearDown() override {
+      EFIKA_Matrix_free(&M_);
+      EFIKA_Matrix_free(&I_);
     }
 
     void TestBody() override {
+      int err;
+
       // declare solution vector
       Vector A;
 
       // find all fixed-radius pairs using /brute-force/ algorithm
       A = vector_new();
-      impl::sfr1d()(P_, &A);
+      err = impl::sfr1d()(minsim_, &M_, &I_, &A);
+      ASSERT_EQ(err, 0);
       auto const size_brute_force = A.size;
       vector_delete(&A);
 
       // find all fixed-radius pairs using /efficient/ algorithm
       A = vector_new();
-      TypeParam()(P_, &A);
+      err = TypeParam()(minsim_, &M_, &I_, &A);
+      ASSERT_EQ(err, 0);
       auto const size_efficient = A.size;
       vector_delete(&A);
 
@@ -81,10 +100,11 @@ class interface : public ::testing::Test {
     }
 
   private:
-    float threshold_;
+    float minsim_;
     std::string filename_;
-    Problem P_;
     std::unique_ptr<float[][5]> mem_;
+    EFIKA_Matrix M_;
+    EFIKA_Matrix I_;
 };
 
 } // namespace

@@ -4,191 +4,234 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
+#include "efika/core.h"
+#include "efika/impl.h"
+
 #include "efika/core/gc.h"
+#include "efika/core/rename.h"
 #include "efika/impl/export.h"
 #include "efika/impl/rename.h"
-#include "efika/impl.h"
 
 #define BRUTE_FORCE_THRESHOLD 256
 
-typedef unsigned const * View;
-
-typedef struct subproblem {
-  unsigned k;
-  unsigned n;
-  unsigned *m;
-  View const *V;
-} Subproblem;
-
-typedef struct scratchspace {
+typedef struct scratchspace
+{
   bool *subp;
-  View * scratch;
 } ScratchSpace;
 
-typedef struct hyperplane {
-  float l;
-  unsigned ln;
-  unsigned rn;
-  unsigned dim;
+typedef struct hyperplane
+{
+  val_t l;
+  ind_t ln;
+  ind_t rn;
+  ind_t dim;
 } Hyperplane;
 
 
-static inline float dist(Problem const P, unsigned const p0, unsigned const p1) {
-  unsigned const k      = P.k;
-  float (*const mem)[5] = P.mem;
+static inline val_t
+dist(Matrix const * const M, ind_t const p0, ind_t const p1)
+{
+  /* unpack /M/ */
+  ind_t const nc = M->nc;
+  ind_t const * const ia = M->ia;
+  val_t const * const a  = M->a;
 
-  float sum = 0.0;
-  for (unsigned i = 0; i < k; i++) {
-    float const d = mem[p0][i] - mem[p1][i];
+  val_t sum = 0.0;
+  for (ind_t i = 0; i < nc; i++) {
+    val_t const d = a[ia[p0] + i] - a[ia[p1] + i];
     sum += d * d;
   }
   return sum;
 }
 
-static inline Hyperplane select_hyperplane(Problem const P, Subproblem const SP) {
-  float (*const mem)[5]    = P.mem;
-  unsigned const n         = SP.n;
-  unsigned const * const m = SP.m;
-  View const * const V     = SP.V;
+static inline
+Hyperplane select_hyperplane(Matrix const * const I)
+{
+  /* unpack /I/ */
+  ind_t const nr = I->nr;
+  ind_t const * const ia = I->ia;
+  val_t const * const a  = I->a;
 
-  unsigned const hp = (unsigned)rand() % SP.k;
-  unsigned const cn = 1 + ((n - 1) / 2);
-  return (Hyperplane){ mem[V[hp][cn - 1]][m[hp]], cn, n - cn, hp };
+  ind_t const hp = (ind_t)rand() % nr;
+  ind_t const n  = ia[hp + 1] - ia[hp];
+  ind_t const cn = 1 + ((n - 1) / 2);
+  return (Hyperplane){ a[ia[hp] + cn - 1], cn, n - cn, hp };
 }
 
-static int sfrkd_2(Hyperplane const HP, Problem const P, Subproblem const SP, ScratchSpace const SS, Vector * const A);
+static int
+sfrkd_2(
+  val_t const minsim,
+  Matrix const * const M,
+  Matrix const * const I,
+  Hyperplane const HP,
+  ScratchSpace const SS,
+  Vector * const A
+);
 
-static int sfr1d_1(Problem const P, Subproblem const SP, Vector * const A) {
-  /* unpack... */
-  float const t            = P.t;
-  float (*const mem)[5]    = P.mem;
-  unsigned const n         = SP.n;
-  unsigned const * const m = SP.m;
-  View const * const V     = SP.V;
+static int
+sfr1d_1(
+  val_t const minsim,
+  Matrix const * const M,
+  Matrix const * const I,
+  Vector * const A
+)
+{
+  /* unpack /I/ */
+  ind_t const * const ia = I->ia;
+  ind_t const * const ja = I->ja;
+  val_t const * const a  = I->a;
 
-  if (0 == n)
+  if (0 == ia[1] - ia[0])
     return 0;
 
-  float const t2 = t * t;
+  val_t const minsim2 = minsim * minsim;
 
-  for (unsigned i = 0; i < n - 1; i++) {
-    for (unsigned j = i + 1; j < n; j++) {
-      /* check that V_j is no more than P.t away from V_i, if so, then we have
-       * visited all possible points within the radius of V_i. */
-      float const v = mem[V[0][j]][m[0]] - mem[V[0][i]][m[0]];
-      if (v * v > t2)
+  for (ind_t j = ia[0]; j < ia[1] - 1; j++) {
+    for (ind_t k = j + 1; k < ia[1]; k++) {
+      /* check that V_k is no more than minsim away from V_j, if so, then we
+       * have visited all possible points within the radius of V_j. */
+      val_t const v = a[k] - a[j];
+      if (v * v > minsim2)
         break;
 
-      /* compute distance between points V_i and V_j and record as a solution,
-       * if the distance is less than P.t */
-      float const dij = dist(P, V[0][i], V[0][j]);
-      if (dij <= t2)
-        vector_push_back(A, (Solution){ V[0][i], V[0][j], dij });
+      /* compute distance between points V_j and V_k and record as a solution,
+       * if the distance is less than minsim */
+      val_t const djk = dist(M, ja[j], ja[k]);
+      if (djk <= minsim2)
+        vector_push_back(A, (Solution){ ja[j], ja[k], djk });
     }
   }
 
   return 0;
 }
 
-static int sfrkd_1(Problem const P, Subproblem const SP, ScratchSpace const SS, Vector * const A) {
+static int
+sfrkd_1(
+  val_t const minsim,
+  Matrix const * const M,
+  Matrix const * const I,
+  ScratchSpace const SS,
+  Vector * const A
+)
+{
   /*==========================================================================*/
   GC_func_init();
   /*==========================================================================*/
 
   int ret;
 
-  /* unpack... */
-  unsigned const k     = SP.k;
-  unsigned const n     = SP.n;
-  View const * const V = SP.V;
-  bool * const subp    = SS.subp;
+  /* unpack /I/ */
+  ind_t const nr = I->nr;
+  ind_t const nc = I->nc;
+  ind_t const * const ia = I->ia;
+  ind_t const * const ja = I->ja;
+  val_t const * const a  = I->a;
+
+  /* unpack /SS/ */
+  bool * const subp = SS.subp;
 
   /* return the minimal distance found by the brute-force algorithm */
-  if (1 == k || n < BRUTE_FORCE_THRESHOLD)
-    return sfr1d_1(P, SP, A);
+  if (1 == nr || ia[1] - ia[0] < BRUTE_FORCE_THRESHOLD)
+    return sfr1d_1(minsim, M, I, A);
 
   /* select the hyperplane that determines the left and right sub-problems */
-  Hyperplane const HP = select_hyperplane(P, SP);
-  unsigned const ln  = HP.ln;
-  unsigned const rn  = HP.rn;
-  unsigned const dim = HP.dim;
+  Hyperplane const HP = select_hyperplane(I);
+  ind_t const ln  = HP.ln;
+  ind_t const rn  = HP.rn;
+  ind_t const dim = HP.dim;
 
-  /* allocate memory */
-  View     * const Vk = GC_malloc(2 * k * sizeof(*Vk));
-  unsigned * const Vn = GC_malloc((k - 1) * n * sizeof(*Vn));
+  /* FIXME: This memory will be lost if any GC failure happens. */
+  Matrix Il, Ir;
+  ret = Matrix_init(&Il);
+  GC_assert(!ret);
+  ret = Matrix_init(&Ir);
+  GC_assert(!ret);
 
-  /* create view arrays Vl and Vr */
-  View * const Vl = Vk;
-  View * const Vr = Vk + k;
+  Il.nr = nr;
+  Il.nc = nc;
+  Il.ia = GC_malloc((nr + 1) * sizeof(*Il.ia));
+  Il.ja = GC_malloc(nr * ln * sizeof(*Il.ja));
+  Il.a  = GC_malloc(nr * ln * sizeof(*Il.a));
+
+  Ir.nr = nr;
+  Ir.nc = nc;
+  Ir.ia = GC_malloc((nr + 1) * sizeof(*Ir.ia));
+  Ir.ja = GC_malloc(nr * rn * sizeof(*Ir.ja));
+  Ir.a  = GC_malloc(nr * rn * sizeof(*Ir.a));
 
   /* mark points that will be in left and right view */
-  for (unsigned i = 0; i < n; i++)
-    subp[V[dim][i]] = i >= ln;
+  for (ind_t i = 0, j = ia[dim]; j < ia[dim + 1]; i++, j++)
+    subp[ja[j]] = i >= ln;
 
-  for (unsigned i = 0, j = 0; i < k; i++) {
-    unsigned *vn;
-
-    if (i == dim) {
-      vn = (unsigned*)V[dim];
-    } else {
-      vn = Vn + n * j++; /* offset into block allocation */
-
-      unsigned *vl = vn;
-      unsigned *vr = vn + ln;
-      for (unsigned l = 0; l < n; l++) {
-        if (subp[V[i][l]])
-          *vr++ = V[i][l];
-        else
-          *vl++ = V[i][l];
+  Il.ia[0] = 0;
+  Ir.ia[0] = 0;
+  for (ind_t i = 0, sln = 0, srn = 0; i < nr; i++) {
+    for (ind_t j = ia[i]; j < ia[i + 1]; j++) {
+      if (subp[ja[j]]) {
+        Ir.ja[srn] = ja[j];
+        Ir.a[srn++] = a[j];
+      } else {
+        Il.ja[sln] = ja[j];
+        Il.a[sln++] = a[j];
       }
     }
-
-    /* create views vl and vr */
-    Vl[i] = vn;
-    Vr[i] = vn + ln;
+    Il.ia[i + 1] = sln;
+    Ir.ia[i + 1] = srn;
   }
 
   /* compute all fixed-radius pairs in the two sub-problems */
-  ret = sfrkd_1(P, (Subproblem){ k, ln, SP.m, Vl }, SS, A);
+  ret = sfrkd_1(minsim, M, &Il, SS, A);
   GC_assert(!ret);
-  ret = sfrkd_1(P, (Subproblem){ k, rn, SP.m, Vr }, SS, A);
+  ret = sfrkd_1(minsim, M, &Ir, SS, A);
   GC_assert(!ret);
 
   /* compute all fixed-radius pairs in the cross-hyperplane slab */
-  sfrkd_2(HP, P, SP, (ScratchSpace){ subp, Vl }, A);
+  ret = sfrkd_2(minsim, M, I, HP, SS, A);
+  GC_assert(!ret);
 
   /* free memory */
-  GC_free(Vn);
-  GC_free(Vk);
+  Matrix_free(&Il);
+  Matrix_free(&Ir);
 
   return 0;
 }
 
-static int sfrkd_2(Hyperplane const HP, Problem const P, Subproblem const SP, ScratchSpace const SS, Vector * const A) {
+static int
+sfrkd_2(
+  val_t const minsim,
+  Matrix const * const M,
+  Matrix const * const I,
+  Hyperplane const HP,
+  ScratchSpace const SS,
+  Vector * const A
+)
+{
   /*==========================================================================*/
   GC_func_init();
   /*==========================================================================*/
 
   int ret;
 
-  /* unpack... */
-  float const l            = HP.l ;
-  unsigned const ln        = HP.ln;
-  unsigned const dim       = HP.dim;
-  float const t            = P.t;
-  float (*const mem)[5]    = P.mem;
-  unsigned const k         = SP.k;
-  unsigned const n         = SP.n;
-  unsigned const * const m = SP.m;
-  View const * const V     = SP.V;
-  bool * const subp        = SS.subp;
-  View * const scratch     = SS.scratch;
+  /* unpack /I/ */
+  ind_t const nr = I->nr;
+  ind_t const nc = I->nc;
+  ind_t const * const ia = I->ia;
+  ind_t const * const ja = I->ja;
+  val_t const * const a  = I->a;
+
+  /* unpack /HP/ */
+  val_t const l   = HP.l ;
+  ind_t const ln  = HP.ln;
+  ind_t const dim = HP.dim;
+
+  /* unpack /SS/ */
+  bool * const subp = SS.subp;
 
   /* mark all the points for which |x-l| <= t */
-  unsigned sn = 0;
-  for (unsigned i = 0; i < n; i++) {
-    subp[V[dim][i]] = fabsf(mem[V[dim][i]][m[dim]] - l) <= t;
-    sn += subp[V[dim][i]];
+  ind_t sn = 0;
+  for (ind_t j = ia[dim]; j < ia[dim + 1]; j++) {
+    subp[ja[j]] = fabsf(a[j] - l) <= minsim;
+    sn += subp[ja[j]];
   }
 
   /* return now if there will be no points in the slab */
@@ -196,21 +239,31 @@ static int sfrkd_2(Hyperplane const HP, Problem const P, Subproblem const SP, Sc
     return 0;
 
   /* allocate memory */
-  unsigned * const M = GC_malloc((k - 1) * sizeof(*M));
-  View     * const S = GC_malloc((k - 1) * sizeof(*S));
+  ind_t * const T = GC_malloc((nr - 1) * sizeof(*T));
 
-  for (unsigned i = 0, j = 0; i < k; i++) {
+  Matrix II;
+  ret = Matrix_init(&II);
+  GC_assert(!ret);
+
+  II.nr = nr - 1;
+  II.nc = nc;
+  II.ia = GC_malloc(nr * sizeof(*II.ia));
+  II.ja = GC_malloc((nr - 1) * sn * sizeof(*II.ja));
+  II.a  = GC_malloc((nr - 1) * sn * sizeof(*II.a));
+
+  II.ia[0] = 0;
+  for (ind_t i = 0, ni = 0, sln = 0; i < nr; i++) {
     if (i == dim)
       continue;
 
-    /* create view */
-    unsigned *si = (unsigned*)scratch[i];
-    for (unsigned ii = 0; ii < n; ii++)
-      if (subp[V[i][ii]])
-        *si++ = V[i][ii];
+    for (ind_t j = ia[i]; j < ia[i + 1]; j++) {
+      if (subp[ja[j]]) {
+        II.ja[sln] = ja[j];
+        II.a[sln++] = a[j];
+      }
+    }
 
-    M[j]   = m[i];
-    S[j++] = scratch[i];
+    II.ia[++ni] = sln;
   }
 
   /* record current number of solutions, so "false-drops" can be reconciled
@@ -218,12 +271,12 @@ static int sfrkd_2(Hyperplane const HP, Problem const P, Subproblem const SP, Sc
   size_t size = A->size;
 
   /* compute all fixed-radius pairs in the slab sub-problem */
-  ret = sfrkd_1(P, (Subproblem){ k - 1, sn, M, S }, SS, A);
+  ret = sfrkd_1(minsim, M, &II, SS, A);
   GC_assert(!ret);
 
   /* re-mark the left and right sub-problems */
-  for (unsigned i = 0; i < n; i++)
-    subp[V[dim][i]] = i >= ln;
+  for (ind_t i = 0, j = ia[dim]; j < ia[dim + 1]; i++, j++)
+    subp[ja[j]] = i >= ln;
 
   /* remove any "false-drops" */
   for (size_t i = size; i < A->size; i++) {
@@ -234,101 +287,31 @@ static int sfrkd_2(Hyperplane const HP, Problem const P, Subproblem const SP, Sc
   A->size = size;
 
   /* free memory */
-  GC_free(M);
-  GC_free(S);
+  Matrix_free(&II);
 
   return 0;
 }
 
 
-struct kv {
-  float k;
-  unsigned v;
-};
-
-static int kvcmp(void const * const ap, void const * const bp) {
-  return ((struct kv const*)ap)->k < ((struct kv const*)bp)->k ? -1 : 1;
+EFIKA_IMPL_EXPORT int
+Impl_sfr1d(val_t const minsim, Matrix const * const M, Matrix const * const I,
+           Vector * const A)
+{
+  return sfr1d_1(minsim, M, I, A);
 }
 
-static int make_subproblem(Problem const P, Subproblem * const SP) {
+EFIKA_IMPL_EXPORT int
+Impl_sfrkd(val_t const minsim, Matrix const * const M, Matrix const * const I,
+           Vector * const A)
+{
   /*==========================================================================*/
   GC_func_init();
   /*==========================================================================*/
 
-  /* allocate key/value array */
-  struct kv * const kv = GC_malloc(P.n * sizeof(*kv));
-  View      * const Vk = GC_malloc(P.k * sizeof(*Vk));
-  unsigned  * const Vn = GC_malloc(P.k * P.n * sizeof(*Vn));
-  unsigned  * const m  = GC_malloc(P.k * sizeof(*m));
+  bool * const subp = GC_malloc(M->nr * sizeof(*subp));
 
-  for (unsigned i = 0; i < P.k; i++) {
-    /* sort points according to this dimension */
-    for (unsigned j = 0; j < P.n; j++)
-      kv[j].k = P.mem[j][i], kv[j].v = j;
-    qsort(kv, P.n, sizeof(*kv), kvcmp);
-
-    /* create view for this dimension */
-    unsigned *vn = Vn + i * P.n;
-
-    /* create this dimension */
-    for (unsigned j = 0; j < P.n; j++)
-      vn[j] = kv[j].v;
-
-    /* record view for this dimension */
-    Vk[i] = vn;
-    m[i]  = i;
-  }
-
-  GC_free(kv);
-
-  *SP = (Subproblem){ P.k, P.n, m, Vk };
+  int err = sfrkd_1(minsim, M, I, (ScratchSpace){ subp }, A);
+  GC_assert(!err);
 
   return 0;
-}
-
-static int make_scratchspace(Problem const P, ScratchSpace * const SS) {
-  /*==========================================================================*/
-  GC_func_init();
-  /*==========================================================================*/
-
-  bool * const subp = GC_malloc(P.n * sizeof(*subp));
-
-  *SS = (ScratchSpace){ subp, NULL };
-
-  return 0;
-}
-
-
-EFIKA_IMPL_EXPORT void
-Impl_sfr1d(Problem const P, Vector * const A) {
-  int ret;
-
-  Subproblem SP;
-
-  ret = make_subproblem(P, &SP);
-  assert(!ret); (void)ret;
-
-  sfr1d_1(P, SP, A);
-
-  free((void*)SP.V[0]);
-  free((void*)SP.V);
-}
-
-EFIKA_IMPL_EXPORT void
-Impl_sfrkd(Problem const P, Vector * const A) {
-  int ret;
-  Subproblem SP;
-  ScratchSpace SS;
-
-  ret = make_subproblem(P, &SP);
-  assert(!ret); (void)ret;
-  ret = make_scratchspace(P, &SS);
-  assert(!ret); (void)ret;
-
-  sfrkd_1(P, SP, SS, A);
-
-  free(SP.m);
-  free((void*)SP.V[0]);
-  free((void*)SP.V);
-  free(SS.subp);
 }

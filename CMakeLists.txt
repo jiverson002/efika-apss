@@ -11,6 +11,7 @@ endif()
 
 # Include required CMake modules
 include(GenerateExportHeader)
+include(FetchContent)
 
 #-------------------------------------------------------------------------------
 # COMPONENT configuration
@@ -40,8 +41,6 @@ add_library(EfikaSDK::impl ALIAS ${PROJECT_NAME}-sdk)
 #-------------------------------------------------------------------------------
 # Declare efika dependencies
 #-------------------------------------------------------------------------------
-include(FetchContent)
-
 foreach(dep core)
   FetchContent_Declare(efika-${dep}
     GIT_REPOSITORY git@github.com:jiverson002/efika-${dep}.git)
