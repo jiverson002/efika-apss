@@ -8,6 +8,7 @@
 #include "efika/impl.h"
 
 #include "efika/core/gc.h"
+#include "efika/core/pp.h"
 #include "efika/core/rename.h"
 #include "efika/impl/export.h"
 #include "efika/impl/rename.h"
@@ -297,6 +298,9 @@ EFIKA_IMPL_EXPORT int
 Impl_sfr1d(val_t const minsim, Matrix const * const M, Matrix const * const I,
            Vector * const A)
 {
+  if (!pp_all(M, I, A))
+    return -1;
+
   return sfr1d_1(minsim, M, I, A);
 }
 
@@ -307,6 +311,9 @@ Impl_sfrkd(val_t const minsim, Matrix const * const M, Matrix const * const I,
   /*==========================================================================*/
   GC_func_init();
   /*==========================================================================*/
+
+  if (!pp_all(M, I, A))
+    return -1;
 
   bool * const subp = GC_malloc(M->nr * sizeof(*subp));
 
