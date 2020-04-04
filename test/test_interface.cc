@@ -47,6 +47,9 @@ class interface : public ::testing::Test {
       err = EFIKA_Matrix_init(&M_);
       if (err)
         throw std::runtime_error("Could not initialize matrix");
+      err = EFIKA_Matrix_init(&I_);
+      if (err)
+        throw std::runtime_error("Could not initialize matrix");
 
       FILE * fp = fopen((filename_).c_str(), "r");
       if (!fp)
@@ -102,7 +105,6 @@ class interface : public ::testing::Test {
   private:
     float minsim_;
     std::string filename_;
-    std::unique_ptr<float[][5]> mem_;
     EFIKA_Matrix M_;
     EFIKA_Matrix I_;
 };

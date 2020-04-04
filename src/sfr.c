@@ -15,6 +15,7 @@
 
 #define BRUTE_FORCE_THRESHOLD 256
 
+
 typedef struct scratchspace
 {
   bool *subp;
@@ -27,6 +28,17 @@ typedef struct hyperplane
   ind_t rn;
   ind_t dim;
 } Hyperplane;
+
+
+static int
+sfrkd_2(
+  val_t const minsim,
+  Matrix const * const M,
+  Matrix const * const I,
+  Hyperplane const HP,
+  ScratchSpace const SS,
+  Vector * const A
+);
 
 
 static inline val_t
@@ -59,15 +71,6 @@ Hyperplane select_hyperplane(Matrix const * const I)
   return (Hyperplane){ a[ia[hp] + cn - 1], cn, n - cn, hp };
 }
 
-static int
-sfrkd_2(
-  val_t const minsim,
-  Matrix const * const M,
-  Matrix const * const I,
-  Hyperplane const HP,
-  ScratchSpace const SS,
-  Vector * const A
-);
 
 static int
 sfr1d_1(
@@ -115,9 +118,8 @@ sfrkd_1(
   Vector * const A
 )
 {
-  /*==========================================================================*/
+  /* ...garbage collected function... */
   GC_func_init();
-  /*==========================================================================*/
 
   int ret;
 
@@ -141,13 +143,19 @@ sfrkd_1(
   ind_t const rn  = HP.rn;
   ind_t const dim = HP.dim;
 
-  /* FIXME: This memory will be lost if any GC failure happens. */
+  /* mark points that will be in left and right view */
+  for (ind_t i = 0, j = ia[dim]; j < ia[dim + 1]; i++, j++)
+    subp[ja[j]] = i >= ln;
+
   Matrix Il, Ir;
   ret = Matrix_init(&Il);
   GC_assert(!ret);
+  GC_register_free(Matrix_free, &Il);
   ret = Matrix_init(&Ir);
   GC_assert(!ret);
+  GC_register_free(Matrix_free, &Ir);
 
+  /* TODO: Extract this logic into a Matrix function */
   Il.nr = nr;
   Il.nc = nc;
   Il.ia = GC_malloc((nr + 1) * sizeof(*Il.ia));
@@ -159,10 +167,6 @@ sfrkd_1(
   Ir.ia = GC_malloc((nr + 1) * sizeof(*Ir.ia));
   Ir.ja = GC_malloc(nr * rn * sizeof(*Ir.ja));
   Ir.a  = GC_malloc(nr * rn * sizeof(*Ir.a));
-
-  /* mark points that will be in left and right view */
-  for (ind_t i = 0, j = ia[dim]; j < ia[dim + 1]; i++, j++)
-    subp[ja[j]] = i >= ln;
 
   Il.ia[0] = 0;
   Ir.ia[0] = 0;
@@ -191,8 +195,8 @@ sfrkd_1(
   GC_assert(!ret);
 
   /* free memory */
-  Matrix_free(&Il);
-  Matrix_free(&Ir);
+  GC_free(&Il);
+  GC_free(&Ir);
 
   return 0;
 }
@@ -207,9 +211,8 @@ sfrkd_2(
   Vector * const A
 )
 {
-  /*==========================================================================*/
+  /* ...garbage collected function... */
   GC_func_init();
-  /*==========================================================================*/
 
   int ret;
 
@@ -242,29 +245,30 @@ sfrkd_2(
   /* allocate memory */
   ind_t * const T = GC_malloc((nr - 1) * sizeof(*T));
 
-  Matrix II;
-  ret = Matrix_init(&II);
+  Matrix Is;
+  ret = Matrix_init(&Is);
   GC_assert(!ret);
+  GC_register_free(Matrix_free, &Is);
 
-  II.nr = nr - 1;
-  II.nc = nc;
-  II.ia = GC_malloc(nr * sizeof(*II.ia));
-  II.ja = GC_malloc((nr - 1) * sn * sizeof(*II.ja));
-  II.a  = GC_malloc((nr - 1) * sn * sizeof(*II.a));
+  Is.nr = nr - 1;
+  Is.nc = nc;
+  Is.ia = GC_malloc(nr * sizeof(*Is.ia));
+  Is.ja = GC_malloc((nr - 1) * sn * sizeof(*Is.ja));
+  Is.a  = GC_malloc((nr - 1) * sn * sizeof(*Is.a));
 
-  II.ia[0] = 0;
+  Is.ia[0] = 0;
   for (ind_t i = 0, ni = 0, sln = 0; i < nr; i++) {
     if (i == dim)
       continue;
 
     for (ind_t j = ia[i]; j < ia[i + 1]; j++) {
       if (subp[ja[j]]) {
-        II.ja[sln] = ja[j];
-        II.a[sln++] = a[j];
+        Is.ja[sln] = ja[j];
+        Is.a[sln++] = a[j];
       }
     }
 
-    II.ia[++ni] = sln;
+    Is.ia[++ni] = sln;
   }
 
   /* record current number of solutions, so "false-drops" can be reconciled
@@ -272,7 +276,7 @@ sfrkd_2(
   size_t size = A->size;
 
   /* compute all fixed-radius pairs in the slab sub-problem */
-  ret = sfrkd_1(minsim, M, &II, SS, A);
+  ret = sfrkd_1(minsim, M, &Is, SS, A);
   GC_assert(!ret);
 
   /* re-mark the left and right sub-problems */
@@ -288,7 +292,7 @@ sfrkd_2(
   A->size = size;
 
   /* free memory */
-  Matrix_free(&II);
+  GC_free(&Is);
 
   return 0;
 }
@@ -308,9 +312,8 @@ EFIKA_IMPL_EXPORT int
 Impl_sfrkd(val_t const minsim, Matrix const * const M, Matrix const * const I,
            Vector * const A)
 {
-  /*==========================================================================*/
+  /* ...garbage collected function... */
   GC_func_init();
-  /*==========================================================================*/
 
   if (!pp_all(M, I, A))
     return -1;
@@ -319,6 +322,8 @@ Impl_sfrkd(val_t const minsim, Matrix const * const M, Matrix const * const I,
 
   int err = sfrkd_1(minsim, M, I, (ScratchSpace){ subp }, A);
   GC_assert(!err);
+
+  GC_free(subp);
 
   return 0;
 }
