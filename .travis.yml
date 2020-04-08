@@ -2,11 +2,7 @@ language: cpp
 
 dist: xenial
 
-# Branch whitelist.
-branches:
-  only:
-    - master
-
+# Keep CMake up-to-date
 addons:
   apt:
     sources:

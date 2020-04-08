@@ -27,7 +27,7 @@ set_target_properties(gtest_main
   PROPERTIES EXCLUDE_FROM_ALL 1 EXCLUDE_FROM_DEFAULT_BUILD 1)
 
 gtest_discover_tests(${PROJECT_NAME}-tests
-  PROPERTIES TIMEOUT 120)
+  PROPERTIES TIMEOUT 1000)
 
 #-------------------------------------------------------------------------------
 # Declare efika dependencies

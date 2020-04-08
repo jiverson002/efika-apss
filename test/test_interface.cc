@@ -17,10 +17,10 @@
 
 namespace impl {
 
-struct sfr1d {
+struct sfr0d {
   int operator()(EFIKA_val_t const minsim, EFIKA_Matrix const * const M,
-                 EFIKA_Matrix const * const I, Vector * const A) {
-    return EFIKA_Impl_sfr1d(minsim, M, I, A);
+                 Vector * const A) {
+    return EFIKA_Impl_sfr0d(minsim, M, A);
   }
 };
 
@@ -87,7 +87,7 @@ class interface : public ::testing::Test {
 
       // find all fixed-radius pairs using /brute-force/ algorithm
       A = vector_new();
-      err = impl::sfr1d()(minsim_, &M_, &I_, &A);
+      err = impl::sfr0d()(minsim_, &M_, &A);
       ASSERT_EQ(err, 0);
       auto const size_brute_force = A.size;
       vector_delete(&A);
