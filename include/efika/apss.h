@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: MIT */
-#ifndef EFIKA_IMPL_H
-#define EFIKA_IMPL_H 1
+#ifndef EFIKA_APSS_H
+#define EFIKA_APSS_H 1
 
 #include <assert.h>
 #include <stdbool.h>
@@ -55,13 +55,13 @@ static inline void vector_delete(Vector * const v) {
 extern "C" {
 #endif
 
-int EFIKA_Impl_bruteforce(EFIKA_val_t const minsim,
+int EFIKA_apss_bruteforce(EFIKA_val_t const minsim,
                           EFIKA_Matrix const * const M,
                           EFIKA_Matrix       * const S);
-int EFIKA_Impl_sfr0d(EFIKA_val_t const minsim,
+int EFIKA_apss_sfr0d(EFIKA_val_t const minsim,
                      EFIKA_Matrix const * const M,
                      Vector * const A);
-int EFIKA_Impl_sfrkd(EFIKA_val_t const minsim,
+int EFIKA_apss_sfrkd(EFIKA_val_t const minsim,
                      EFIKA_Matrix const * const M,
                      EFIKA_Matrix const * const I,
                      Vector * const A);
@@ -70,4 +70,4 @@ int EFIKA_Impl_sfrkd(EFIKA_val_t const minsim,
 }
 #endif
 
-#endif /* EFIKA_IMPL_H */
+#endif /* EFIKA_APSS_H */

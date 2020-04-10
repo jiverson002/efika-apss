@@ -4,13 +4,13 @@
 #include <stdlib.h>
 
 #include "efika/core.h"
-#include "efika/impl.h"
+#include "efika/apss.h"
 
 #include "efika/core/gc.h"
 #include "efika/core/pp.h"
 #include "efika/core/rename.h"
-#include "efika/impl/export.h"
-#include "efika/impl/rename.h"
+#include "efika/apss/export.h"
+#include "efika/apss/rename.h"
 
 
 #define BRUTE_FORCE_THRESHOLD 256
@@ -257,7 +257,6 @@ sfr1d_1(val_t const minsim, Matrix const * const M, Matrix const * const I,
 #endif
 
 
-/* ...mark the left and right subproblems... */
 static void
 mark_1(Hyperplane const HP, Matrix const * const I, ScratchSpace const SS)
 {
@@ -594,8 +593,8 @@ sfrkd_2(val_t const minsim, Matrix const * const M, Matrix const * const I,
 }
 
 
-EFIKA_IMPL_EXPORT int
-Impl_sfr0d(val_t const minsim, Matrix const * const M, Vector * const A)
+EFIKA_APSS_EXPORT int
+apss_sfr0d(val_t const minsim, Matrix const * const M, Vector * const A)
 {
   if (!pp_all(M, A))
     return -1;
@@ -603,8 +602,8 @@ Impl_sfr0d(val_t const minsim, Matrix const * const M, Vector * const A)
   return sfr0d_1(minsim, M, A);
 }
 
-EFIKA_IMPL_EXPORT int
-Impl_sfrkd(val_t const minsim, Matrix const * const M, Matrix const * const I,
+EFIKA_APSS_EXPORT int
+apss_sfrkd(val_t const minsim, Matrix const * const M, Matrix const * const I,
            Vector * const A)
 {
   /* ...garbage collected function... */

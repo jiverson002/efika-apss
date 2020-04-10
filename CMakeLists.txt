@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 3.14)
 
 # Subproject of efika
-project(efika-impl)
+project(efika-apss)
 
 # Include build configurations (compiler standards, options, etc.)
 if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND EFIKA_BUILDCONFIG_FILE)
@@ -20,8 +20,8 @@ add_library(${PROJECT_NAME}     OBJECT)
 add_library(${PROJECT_NAME}-sdk INTERFACE)
 
 generate_export_header(${PROJECT_NAME}
-  EXPORT_FILE_NAME efika/impl/export.h
-  BASE_NAME        impl
+  EXPORT_FILE_NAME efika/apss/export.h
+  BASE_NAME        apss
   PREFIX_NAME      EFIKA_)
 
 target_sources(${PROJECT_NAME}
@@ -35,8 +35,8 @@ target_include_directories(${PROJECT_NAME}
 target_include_directories(${PROJECT_NAME}-sdk
   INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src/include)
 
-add_library(Efika::impl    ALIAS ${PROJECT_NAME})
-add_library(EfikaSDK::impl ALIAS ${PROJECT_NAME}-sdk)
+add_library(Efika::apss    ALIAS ${PROJECT_NAME})
+add_library(EfikaSDK::apss ALIAS ${PROJECT_NAME}-sdk)
 
 #-------------------------------------------------------------------------------
 # Declare efika dependencies
