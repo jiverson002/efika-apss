@@ -25,7 +25,7 @@ generate_export_header(${PROJECT_NAME}
   PREFIX_NAME      EFIKA_)
 
 target_sources(${PROJECT_NAME}
-  PRIVATE src/sfr.c)
+  PRIVATE src/bruteforce.c src/sfr.c)
 
 target_include_directories(${PROJECT_NAME}
   PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/include
