@@ -55,6 +55,9 @@ static inline void vector_delete(Vector * const v) {
 extern "C" {
 #endif
 
+int EFIKA_Impl_bruteforce(EFIKA_val_t const minsim,
+                          EFIKA_Matrix const * const M,
+                          EFIKA_Matrix       * const S);
 int EFIKA_Impl_sfr0d(EFIKA_val_t const minsim,
                      EFIKA_Matrix const * const M,
                      Vector * const A);
