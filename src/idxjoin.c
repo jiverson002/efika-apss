@@ -1,20 +1,23 @@
 /* SPDX-License-Identifier: MIT */
 #include <string.h>
 
-#include "efika/core.h"
 #include "efika/apss.h"
+#include "efika/core.h"
 
+#include "efika/apss/export.h"
+#include "efika/apss/rename.h"
 #include "efika/core/blas.h"
 #include "efika/core/gc.h"
 #include "efika/core/pp.h"
-#include "efika/apss/export.h"
-#include "efika/apss/rename.h"
 
-static int
-bruteforce(val_t const minsim, Matrix const * const M, Matrix * const S)
+EFIKA_APSS_EXPORT int
+apss_idxjoin(val_t const minsim, Matrix * const M, Matrix * const S)
 {
   /* ...garbage collected function... */
   GC_func_init();
+
+  if (!pp_all(M, S))
+    return -1;
 
   /* unpack /M/ */
   ind_t const m_nr = M->nr;
@@ -74,13 +77,4 @@ bruteforce(val_t const minsim, Matrix const * const M, Matrix * const S)
   GC_free(spa);
 
   return 0;
-}
-
-EFIKA_APSS_EXPORT int
-apss_bruteforce(val_t const minsim, Matrix const * const M, Matrix * const S)
-{
-  if (!pp_all(M, S))
-    return -1;
-
-  return bruteforce(minsim, M, S);
 }

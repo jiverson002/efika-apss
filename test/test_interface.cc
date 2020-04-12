@@ -17,21 +17,31 @@
 
 namespace apss {
 
-struct bruteforce {
-  int operator()(EFIKA_val_t const minsim, EFIKA_Matrix const * const M,
+struct idxjoin {
+  static int run(EFIKA_val_t const minsim, EFIKA_Matrix * const M,
                  EFIKA_Matrix * const S)
   {
-    return EFIKA_apss_bruteforce(minsim, M, S);
+    return EFIKA_apss_idxjoin(minsim, M, S);
   }
 };
 
-struct sfrkd {
-  int operator()(EFIKA_val_t const minsim, EFIKA_Matrix const * const M,
-                 EFIKA_Matrix const * const I, Vector * const A)
+struct allpairs {
+  static int run(EFIKA_val_t const minsim, EFIKA_Matrix * const M,
+                 EFIKA_Matrix * const S)
   {
-    return EFIKA_apss_sfrkd(minsim, M, I, A);
+    return EFIKA_apss_allpairs(minsim, M, S);
   }
 };
+
+#if 0
+struct sfr {
+  int operator()(EFIKA_val_t const minsim, EFIKA_Matrix const * const M,
+                 EFIKA_Matrix const * const I, EFIKA_Matrix * const S)
+  {
+    return EFIKA_apss_sfr(minsim, M, I, S);
+  }
+};
+#endif
 
 } // apss
 
@@ -58,36 +68,19 @@ class interface : public ::testing::Test {
       if (err)
         throw std::runtime_error("Could not load `" + filename_ + "'");
 
-      fclose(fp);
-
       err = EFIKA_Matrix_comp(&M_);
       if (err)
-        throw std::runtime_error("Could not compact matrix");
+        throw std::runtime_error("Could not compact column space");
 
       err = EFIKA_Matrix_norm(&M_);
       if (err)
         throw std::runtime_error("Could not normalize matrix");
 
-      err = EFIKA_Matrix_sort(&M_, EFIKA_ASC | EFIKA_COL);
-      if (err)
-        throw std::runtime_error("Could not sort matrix");
-
-      err = EFIKA_Matrix_init(&I_);
-      if (err)
-        throw std::runtime_error("Could not initialize matrix");
-
-      err = EFIKA_Matrix_iidx(&M_, &I_);
-      if (err)
-        throw std::runtime_error("Could not transpose matrix");
-
-      err = EFIKA_Matrix_sort(&I_, EFIKA_ASC | EFIKA_VAL);
-      if (err)
-        throw std::runtime_error("Could not sort matrix");
+      fclose(fp);
     }
 
     void TearDown() override {
       EFIKA_Matrix_free(&M_);
-      EFIKA_Matrix_free(&I_);
     }
 
     void TestBody() override {
@@ -98,48 +91,49 @@ class interface : public ::testing::Test {
       err = EFIKA_Matrix_init(&S);
       ASSERT_EQ(err, 0);
 
-      // find all fixed-radius pairs using /brute-force/ algorithm
-      err = apss::bruteforce()(minsim_, &M_, &S);
+      // compute baseline number of pairs
+      err = apss::idxjoin::run(minsim_, &M_, &S);
       ASSERT_EQ(err, 0);
-      //auto const size_brute_force = A.size;
-
-      //EFIKA_Matrix_free(&S);
+      auto const size_idxjoin = S.nnz;
+      EFIKA_Matrix_free(&S);
 
       // find all fixed-radius pairs using /efficient/ algorithm
-      //A = vector_new();
-      //err = TypeParam()(minsim_, &M_, &I_, &A);
-      //ASSERT_EQ(err, 0);
-      //auto const size_efficient = A.size;
-      //vector_delete(&A);
+      err = TypeParam::run(minsim_, &M_, &S);
+      ASSERT_EQ(err, 0);
+      auto const size_efficient = S.nnz;
+      EFIKA_Matrix_free(&S);
 
-      //std::cout << size_brute_force << " " << size_efficient << std::endl;
+      std::cout << size_idxjoin << " " << size_efficient << std::endl;
 
-      //ASSERT_EQ(size_brute_force, size_efficient);
+      ASSERT_EQ(size_idxjoin, size_efficient);
     }
 
   private:
     float minsim_;
     std::string filename_;
     EFIKA_Matrix M_;
-    EFIKA_Matrix I_;
 };
 
 } // namespace
 
+#define REGISTER_TEST_SET(impl)\
+  do {\
+    auto ndatasets = sizeof(EFIKA_datasets) / sizeof(*EFIKA_datasets);\
+    for(decltype(ndatasets) i = 0; i < ndatasets; i++) {\
+      ::testing::RegisterTest(#impl, EFIKA_datasets[i],\
+        nullptr, nullptr, __FILE__, __LINE__,\
+        [=]() -> ::testing::Test* {\
+          return new interface<apss::impl>(0.90,\
+              std::string(EFIKA_DATA_PATH) + "/" + std::string(EFIKA_datasets[i]));\
+        });\
+    }\
+  } while (0)
+
 int main(int argc, char *argv[]) {
   ::testing::InitGoogleTest(&argc, argv);
 
-  auto ndatasets = sizeof(EFIKA_datasets) / sizeof(*EFIKA_datasets);
-
-  for(decltype(ndatasets) i = 0; i < ndatasets; i++) {
-    ::testing::RegisterTest(
-      "interface", ("sfrkd." + std::string(EFIKA_datasets[i])).c_str(),
-      nullptr, nullptr, __FILE__, __LINE__,
-      [=]() -> ::testing::Test* {
-        return new interface<apss::sfrkd>(0.90,
-            std::string(EFIKA_DATA_PATH) + "/" + std::string(EFIKA_datasets[i]));
-      });
-  }
+  REGISTER_TEST_SET(allpairs);
+  //REGISTER_TEST_SET(sfrkd);
 
   return RUN_ALL_TESTS();
 }
