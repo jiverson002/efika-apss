@@ -12,11 +12,6 @@
 #include "efika/core/pp.h"
 
 /*----------------------------------------------------------------------------*/
-/* ... */
-/*----------------------------------------------------------------------------*/
-#define max(a, b) (a > b ? a : b)
-
-/*----------------------------------------------------------------------------*/
 /* Precompute prefix for a single row. */
 /*----------------------------------------------------------------------------*/
 static inline ind_t
@@ -28,14 +23,16 @@ filter_row(
   val_t const * const tmpmax
 )
 {
-  val_t b1 = 0.0;
+  val_t b1 = 0.0, mx = 0.0;
+
+  /* compute row maximum */
+  for (ind_t j = 0; j < n; j++)
+    if (a[j] > mx)
+      mx = a[j];
 
   for (ind_t j = 0; j < n; j++) {
-    /* Bayardo bound (improved) --- min(cw_jj, rw_ii) ---
-     * tmpmax[jj] will always be less than or equal to rw_ii, since it is the
-     * max value for column jj only considering those vectors with id greater
-     * than ii */
-    b1 += a[j] * tmpmax[ja[j]];
+    /* Bayardo bound */
+    b1 += a[j] * min(mx, tmpmax[ja[j]]);
 
     if (b1 >= minsim) {
       /* return prefix split */
@@ -67,18 +64,17 @@ filter(
   /* allocate scratch memory */
   val_t * const tmpmax = GC_calloc(nc, sizeof(*tmpmax));
 
-  /* find the prefixes in the matrix */
-  for (ind_t ii = nr; ii > 0; ii--) {
-    ind_t const i = ii - 1;
+  /* compute column maximums */
+  for (ind_t i = 0; i < nr; i++)
+    for(ind_t j = ia[i]; j < ia[i + 1]; j++)
+      if (a[j] > tmpmax[ja[j]])
+        tmpmax[ja[j]] = a[j];
 
+  /* find the prefixes in the matrix */
+  for (ind_t i = 0; i < nr; i++)
     /* find prefix split for each row_i */
     ka[i] = ia[i] + filter_row(minsim, ia[i + 1] - ia[i], ja + ia[i], a + ia[i],
                                tmpmax);
-
-    /* update successor column max */
-    for (ind_t j = ia[i]; j < ia[i + 1]; j++)
-      tmpmax[ja[j]] = max(a[j], tmpmax[ja[j]]);
-  }
 
   /* free scratch memory */
   GC_free(tmpmax);
@@ -199,8 +195,16 @@ apss_allpairs_pp(
   /* ...garbage collected function... */
   GC_func_init();
 
-  /* reorder columns of matrix */
+  /* reorder columns in decreasing order of degree */
   int err = Matrix_cord(M, DEG | DSC);
+  GC_assert(!err);
+
+  /* reorder rows in decreasing order of row maximum */
+  err = Matrix_rord(M, VAL | DSC);
+  GC_assert(!err);
+
+  /* reorder each row in increasing order of column id */
+  err = Matrix_sort(M, COL | ASC);
   GC_assert(!err);
 
   /* ... */
