@@ -132,11 +132,11 @@ apss_idxjoin(
   /* ...garbage collected function... */
   GC_func_init();
 
-  bool freepp = false;
-
   /* ... */
   if (!pp_all(M, S))
     return -1;
+
+  bool freepp = false;
 
   /* get /pp/ */
   if (!(M->pp)) {

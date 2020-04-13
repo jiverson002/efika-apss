@@ -14,9 +14,13 @@ int EFIKA_apss_allpairs   (EFIKA_val_t const minsim,
 int EFIKA_apss_allpairs_pp(EFIKA_val_t const minsim,
                            EFIKA_Matrix * const M);
 
-int EFIKA_apss_bruteforce(EFIKA_val_t const minsim,
-                          EFIKA_Matrix * const M,
-                          EFIKA_Matrix * const S);
+int EFIKA_apss_bruteforce   (EFIKA_val_t const minsim,
+                             EFIKA_Matrix * const M,
+                             EFIKA_Matrix * const S);
+int EFIKA_apss_bruteforce_pp(EFIKA_val_t const minsim,
+                             EFIKA_Matrix * const M,
+                             EFIKA_Matrix * const S);
+
 
 int EFIKA_apss_idxjoin   (EFIKA_val_t const minsim,
                           EFIKA_Matrix * const M,

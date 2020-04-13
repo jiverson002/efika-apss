@@ -1,0 +1,5 @@
+/* SPDX-License-Identifier: MIT */
+#ifndef EFIKA_APSS_BRUTEFORCE_H
+#define EFIKA_APSS_BRUTEFORCE_H 1
+
+#endif /* EFIKA_APSS_BRUTEFORCE_H */

@@ -215,6 +215,10 @@ apss_allpairs_pp(
   /* ...garbage collected function... */
   GC_func_init();
 
+  /* ... */
+  if (!M)
+    return -1;
+
   /* reorder columns in decreasing order of degree */
   int err = Matrix_cord(M, DEG | DSC);
   GC_assert(!err);

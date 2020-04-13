@@ -34,6 +34,10 @@ apss_idxjoin_pp(
   GC_func_init();
 
   /* ... */
+  if (!M)
+    return -1;
+
+  /* ... */
   struct pp_payld * pp = GC_malloc(sizeof(*pp));
 
   /* unpack /pp/ */

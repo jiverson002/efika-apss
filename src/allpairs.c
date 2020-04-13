@@ -242,10 +242,6 @@ apss_allpairs(
     ind_t const ncnt = verify(minsim, cnt, i, m_ia, m_ja, m_ka, m_a, pfxmax,
                               marker, tmpspa, tmpcnd);
 
-    /* update successor column max */
-    for (ind_t j = m_ia[i]; j < m_ia[i + 1]; j++)
-      tmpmax[m_ja[j]] = max(m_a[j], tmpmax[m_ja[j]]);
-
     /* _vector_ resize */
     if (nnz + ncnt >= cap) {
       do {
