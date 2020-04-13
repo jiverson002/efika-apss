@@ -31,6 +31,7 @@ struct cand
 /*----------------------------------------------------------------------------*/
 static inline ind_t
 generate(
+  val_t const                  minsim,
   ind_t const                  i,
   ind_t const * const restrict ia,
   ind_t const * const restrict ja,
@@ -39,17 +40,32 @@ generate(
   ind_t const * const restrict ja1,
   val_t const * const restrict a1,
   ind_t       * const restrict marker,
+  val_t       * const restrict tmpmax,
   struct cand * const restrict tmpcnd
 )
 {
   ind_t cnt = 0;
+  val_t mx = 0.0, rs1 = 0.0, minsiz = 0.0;
+
+  /* precompute the minimum size */
+  for (ind_t jj = ia[i]; jj < ia[i + 1]; jj++)
+    mx = max(mx, a[jj]);
+  minsiz = minsim / mx;
+
+  /* precompute maximum dot product */
+  for (ind_t jj = ia[i]; jj < ia[i + 1]; jj++)
+    rs1 += a[jj] * tmpmax[ja[jj]];
 
   /* iterate through each non-zero column, j, for this row */
   for (ind_t jj = ia[i + 1]; jj > ia[i]; jj--) {
     ind_t const j = ja[jj - 1];
     val_t const v = a[jj - 1];
 
-    /* iterate through the rows that have indexed column j */
+    /* ... */
+    bool const allow_unknown = rs1 >= minsim;
+    //bool const allow_unknown = true;
+
+    /* iterate through the rows, k,  that have indexed column j */
     for (ind_t kk = ia1[j]; kk < ia1[j + 1]; kk++) {
       ind_t const k = ja1[kk];
       val_t const w = a1[kk];
@@ -61,12 +77,14 @@ generate(
 
       switch (m) {
         case UNKNOWN:
-        /* initialize solution matrix entry */
-        tmpcnd[cnt].ind = k;
-        tmpcnd[cnt].sim = v * w;
+        if (allow_unknown) {
+          /* initialize solution matrix entry */
+          tmpcnd[cnt].ind = k;
+          tmpcnd[cnt].sim = v * w;
 
-        /* populate marker */
-        marker[k] = cnt++;
+          /* populate marker */
+          marker[k] = cnt++;
+        }
         break;
 
         default:
@@ -74,6 +92,9 @@ generate(
         tmpcnd[m].sim += v * w;
       }
     }
+
+    /* ... */
+    rs1 -= v * tmpmax[j];
   }
 
   return cnt;
@@ -170,6 +191,7 @@ apss_allpairs(
 
   /* allocate scratch memory */
   ind_t       * const marker = GC_malloc(m_nr * sizeof(*marker));
+  val_t       * const tmpmax = GC_calloc(m_nc, sizeof(*tmpmax));
   val_t       * const tmpspa = GC_calloc(m_nc, sizeof(*tmpspa));
   struct cand * const tmpcnd = GC_malloc(m_nr * sizeof(*tmpcnd));
 
@@ -177,16 +199,26 @@ apss_allpairs(
   for (ind_t i = 0; i < m_nr; i++)
     marker[i] = UNKNOWN;
 
+  /* compute column maximums */
+  for (ind_t i = 0; i < m_nr; i++)
+    for(ind_t j = m_ia[i]; j < m_ia[i + 1]; j++)
+      if (m_a[j] > tmpmax[m_ja[j]])
+        tmpmax[m_ja[j]] = m_a[j];
+
   /* find similar neighbors for each query vector */
   s_ia[0] = 0;
   for (ind_t i = 0; i < m_nr; i++) {
     /* generate candidate vectors */
-    ind_t const cnt = generate(i, m_ia, m_ja, m_a, i_ia, i_ja, i_a, marker,
-                               tmpcnd);
+    ind_t const cnt = generate(minsim, i, m_ia, m_ja, m_a, i_ia, i_ja, i_a,
+                               marker, tmpmax, tmpcnd);
 
     /* verify candidate vectors */
     ind_t const ncnt = verify(minsim, cnt, i, m_ia, m_ja, m_ka, m_a, marker,
                               tmpspa, tmpcnd);
+
+    /* update successor column max */
+    for (ind_t j = m_ia[i]; j < m_ia[i + 1]; j++)
+      tmpmax[m_ja[j]] = max(m_a[j], tmpmax[m_ja[j]]);
 
     /* _vector_ resize */
     if (nnz + ncnt >= cap) {
@@ -206,7 +238,7 @@ apss_allpairs(
 
   /* record values in /S/ */
   /*S->fmt  = 0;*/
-  S->sort   = ASC; // TODO: I believe these will be sorted in ascending order
+  S->sort   = NONE;
   /*S->symm = 0;*/
   S->nr     = m_nr;
   S->nc     = m_nr;
@@ -224,6 +256,7 @@ apss_allpairs(
 
   /* free scratch memory */
   GC_free(marker);
+  GC_free(tmpmax);
   GC_free(tmpspa);
   GC_free(tmpcnd);
 
