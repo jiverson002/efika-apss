@@ -6,6 +6,7 @@
 
 #include "efika/apss/allpairs.h"
 #include "efika/apss/export.h"
+#include "efika/apss/khash.h"
 #include "efika/apss/rename.h"
 #include "efika/core/blas.h"
 #include "efika/core/gc.h"
@@ -15,6 +16,9 @@
 /* ... */
 /*----------------------------------------------------------------------------*/
 #define UNKNOWN ((ind_t)-1)
+
+#define WITH_KHASH
+KHASH_MAP_INIT_INT64(m64, ind_t)
 
 /*----------------------------------------------------------------------------*/
 /*! Candidate object. */
@@ -28,8 +32,7 @@ struct cand
 
 /*----------------------------------------------------------------------------*/
 /*! */
-/*----------------------------------------------------------------------------*/
-static inline ind_t
+/*----------------------------------------------------------------------------*/ static inline ind_t
 generate(
   ind_t const                  i,
   ind_t const * const restrict ia,
@@ -39,6 +42,7 @@ generate(
   ind_t const * const restrict ja1,
   val_t const * const restrict a1,
   ind_t       * const restrict marker,
+  khash_t(m64) * const restrict hmarker,
   struct cand * const restrict tmpcnd
 )
 {
@@ -53,12 +57,26 @@ generate(
     for (ind_t kk = ia1[j]; kk < ia1[j + 1]; kk++) {
       ind_t const k = ja1[kk];
       val_t const w = a1[kk];
-      ind_t const m = marker[k];
 
       /* ignore candidates that come after i */
       if (k >= i)
         break;
 
+#if defined(WITH_KHASH)
+      int absent;
+      khint_t key = kh_put(m64, hmarker, k, &absent);
+
+      if (absent) {
+        /* initialize solution matrix entry */
+        tmpcnd[cnt].ind = k;
+        tmpcnd[cnt].sim = v * w;
+
+        kh_value(hmarker, key) = cnt++;
+      } else {
+        tmpcnd[kh_value(hmarker, key)].sim += v * w;
+      }
+#else
+      ind_t const m = marker[k];
       switch (m) {
         case UNKNOWN:
         /* initialize solution matrix entry */
@@ -73,10 +91,14 @@ generate(
         /* update partial dot product for candidate row */
         tmpcnd[m].sim += v * w;
       }
+#endif
     }
   }
 
   return cnt;
+
+  (void)marker;
+  (void)hmarker;
 }
 
 /*----------------------------------------------------------------------------*/
@@ -92,6 +114,7 @@ verify(
   ind_t const * const restrict ka,
   val_t const * const restrict a,
   ind_t       * const restrict marker,
+  khash_t(m64) * const restrict hmarker,
   val_t       * const restrict tmpspa,
   struct cand * const restrict tmpcnd
 )
@@ -104,8 +127,15 @@ verify(
     ind_t const k = tmpcnd[j].ind;
     val_t       s = tmpcnd[j].sim;
 
+#if defined(WITH_KHASH)
+    /* reset hash map */
+    for (khint_t key = kh_begin(hmarker); key != kh_end(hmarker); key++)
+      if (kh_exist(hmarker, key))
+        kh_del(m64, hmarker, key);
+#else
     /* reset markers to unknown value */
     marker[k] = UNKNOWN;
+#endif
 
     /* compute the rest of the dot-product */
     s += BLAS_vdoti(ka[k] - ia[k], a + ia[k], ja + ia[k], tmpspa);
@@ -120,6 +150,9 @@ verify(
   BLAS_vsctrz(ia[i + 1] - ia[i], ja + ia[i], tmpspa);
 
   return ncnt;
+
+  (void)marker;
+  (void)hmarker;
 }
 
 /*----------------------------------------------------------------------------*/
@@ -172,6 +205,7 @@ apss_allpairs(
   ind_t       * const marker = GC_malloc(m_nr * sizeof(*marker));
   val_t       * const tmpspa = GC_calloc(m_nc, sizeof(*tmpspa));
   struct cand * const tmpcnd = GC_malloc(m_nr * sizeof(*tmpcnd));
+  khash_t(m64) * const hmarker = kh_init(m64);
 
   /* initialize marker with unchecked value */
   for (ind_t i = 0; i < m_nr; i++)
@@ -182,11 +216,11 @@ apss_allpairs(
   for (ind_t i = 0; i < m_nr; i++) {
     /* generate candidate vectors */
     ind_t const cnt = generate(i, m_ia, m_ja, m_a, i_ia, i_ja, i_a, marker,
-                               tmpcnd);
+                               hmarker, tmpcnd);
 
     /* verify candidate vectors */
     ind_t const ncnt = verify(minsim, cnt, i, m_ia, m_ja, m_ka, m_a, marker,
-                              tmpspa, tmpcnd);
+                              hmarker, tmpspa, tmpcnd);
 
     /* _vector_ resize */
     if (nnz + ncnt >= cap) {
@@ -206,7 +240,7 @@ apss_allpairs(
 
   /* record values in /S/ */
   /*S->fmt  = 0;*/
-  S->sort   = ASC; // TODO: I believe these will be sorted in ascending order
+  S->sort   = NONE;
   /*S->symm = 0;*/
   S->nr     = m_nr;
   S->nc     = m_nr;
@@ -226,6 +260,7 @@ apss_allpairs(
   GC_free(marker);
   GC_free(tmpspa);
   GC_free(tmpcnd);
+  kh_destroy(m64, hmarker);
 
   return 0;
 }
