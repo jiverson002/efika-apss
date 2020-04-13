@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: MIT */
 #include <stdbool.h>
+#include <string.h>
 
 #include "efika/apss.h"
 #include "efika/core.h"
@@ -38,6 +39,7 @@ generate(
   val_t const * const restrict a,
   ind_t const * const restrict ia1,
   ind_t const * const restrict ja1,
+  ind_t       * const restrict ra1,
   val_t const * const restrict a1,
   ind_t       * const restrict marker,
   val_t       * const restrict tmpmax,
@@ -45,12 +47,12 @@ generate(
 )
 {
   ind_t cnt = 0;
-  val_t mx = 0.0, rs1 = 0.0, minsiz = 0.0;
+  val_t mx = 0.0, rs1 = 0.0, sz1 = 0.0;
 
   /* precompute the minimum size */
   for (ind_t jj = ia[i]; jj < ia[i + 1]; jj++)
     mx = max(mx, a[jj]);
-  minsiz = minsim / mx;
+  sz1 = minsim / mx;
 
   /* precompute maximum dot product */
   for (ind_t jj = ia[i]; jj < ia[i + 1]; jj++)
@@ -63,10 +65,14 @@ generate(
 
     /* ... */
     bool const allow_unknown = rs1 >= minsim;
-    //bool const allow_unknown = true;
+
+    /* remove rows from index that are too short */
+    for (; ra1[j] < ia1[j + 1]; ra1[j]++)
+      if (ia[ja1[ra1[j]] + 1] - ia[ja1[ra1[j]]] >= sz1)
+        break;
 
     /* iterate through the rows, k,  that have indexed column j */
-    for (ind_t kk = ia1[j]; kk < ia1[j + 1]; kk++) {
+    for (ind_t kk = ra1[j]; kk < ia1[j + 1]; kk++) {
       ind_t const k = ja1[kk];
       val_t const w = a1[kk];
       ind_t const m = marker[k];
@@ -178,6 +184,7 @@ apss_allpairs(
   ind_t  const * const m_ka = pp->ka;
 
   /* unpack /I/ */
+  ind_t const         i_nr = I->nr;
   ind_t const * const i_ia = I->ia;
   ind_t const * const i_ja = I->ja;
   val_t const * const i_a  = I->a;
@@ -194,6 +201,7 @@ apss_allpairs(
   val_t       * const tmpmax = GC_calloc(m_nc, sizeof(*tmpmax));
   val_t       * const tmpspa = GC_calloc(m_nc, sizeof(*tmpspa));
   struct cand * const tmpcnd = GC_malloc(m_nr * sizeof(*tmpcnd));
+  ind_t       * const i_ra   = GC_malloc(i_nr * sizeof(*i_ra));
 
   /* initialize marker with unchecked value */
   for (ind_t i = 0; i < m_nr; i++)
@@ -205,12 +213,15 @@ apss_allpairs(
       if (m_a[j] > tmpmax[m_ja[j]])
         tmpmax[m_ja[j]] = m_a[j];
 
+  /* initialize ra1 */
+  memcpy(i_ra, i_ia, i_nr * sizeof(*i_ra));
+
   /* find similar neighbors for each query vector */
   s_ia[0] = 0;
   for (ind_t i = 0; i < m_nr; i++) {
     /* generate candidate vectors */
-    ind_t const cnt = generate(minsim, i, m_ia, m_ja, m_a, i_ia, i_ja, i_a,
-                               marker, tmpmax, tmpcnd);
+    ind_t const cnt = generate(minsim, i, m_ia, m_ja, m_a, i_ia, i_ja, i_ra,
+                               i_a, marker, tmpmax, tmpcnd);
 
     /* verify candidate vectors */
     ind_t const ncnt = verify(minsim, cnt, i, m_ia, m_ja, m_ka, m_a, marker,
@@ -259,6 +270,7 @@ apss_allpairs(
   GC_free(tmpmax);
   GC_free(tmpspa);
   GC_free(tmpcnd);
+  GC_free(i_ra);
 
   return 0;
 }
