@@ -25,7 +25,8 @@ generate_export_header(${PROJECT_NAME}
   PREFIX_NAME      EFIKA_)
 
 target_sources(${PROJECT_NAME}
-  PRIVATE src/allpairs.c src/allpairs_pp.c src/idxjoin.c #[[src/sfr.c]])
+  PRIVATE src/allpairs.c src/allpairs_pp.c src/bruteforce.c src/idxjoin.c
+          src/idxjoin_pp.c #[[src/sfr.c]])
 
 target_include_directories(${PROJECT_NAME}
   PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/include

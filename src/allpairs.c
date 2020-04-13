@@ -162,6 +162,10 @@ apss_allpairs(
   /* ...garbage collected function... */
   GC_func_init();
 
+  /* ... */
+  if (!pp_all(M, S))
+    return -1;
+
   bool freepp = false;
 
   /* get /pp/ */
