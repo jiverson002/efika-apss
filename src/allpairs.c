@@ -118,12 +118,18 @@ verify(
   ind_t const * const restrict ja,
   ind_t const * const restrict ka,
   val_t const * const restrict a,
+  val_t const * const restrict pfxmax,
   ind_t       * const restrict marker,
   val_t       * const restrict tmpspa,
   struct cand * const restrict tmpcnd
 )
 {
-  ind_t ncnt = 0;
+  ind_t ncnt = 0, len = ia[i + 1] - ia[i];
+  val_t mx = 0.0;
+
+  /* precompute the minimum size */
+  for (ind_t j = ia[i]; j < ia[i + 1]; j++)
+    mx = max(mx, a[j]);
 
   BLAS_vsctr(ia[i + 1] - ia[i], a + ia[i], ja + ia[i], tmpspa);
 
@@ -133,6 +139,10 @@ verify(
 
     /* reset markers to unknown value */
     marker[k] = UNKNOWN;
+
+    /* Bayardo filter */
+    if (s + min(ka[k] - ia[k], len) * mx * pfxmax[k] < minsim)
+      continue;
 
     /* compute the rest of the dot-product */
     s += BLAS_vdoti(ka[k] - ia[k], a + ia[k], ja + ia[k], tmpspa);
@@ -186,6 +196,7 @@ apss_allpairs(
   /* unpack /pp/ */
   Matrix const * const I    = &(pp->I);
   ind_t  const * const m_ka = pp->ka;
+  val_t  const * const pfxmax = pp->pfxmax;
 
   /* unpack /I/ */
   ind_t const         i_nr = I->nr;
@@ -228,8 +239,8 @@ apss_allpairs(
                                i_a, marker, tmpmax, tmpcnd);
 
     /* verify candidate vectors */
-    ind_t const ncnt = verify(minsim, cnt, i, m_ia, m_ja, m_ka, m_a, marker,
-                              tmpspa, tmpcnd);
+    ind_t const ncnt = verify(minsim, cnt, i, m_ia, m_ja, m_ka, m_a, pfxmax,
+                              marker, tmpspa, tmpcnd);
 
     /* update successor column max */
     for (ind_t j = m_ia[i]; j < m_ia[i + 1]; j++)

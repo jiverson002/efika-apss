@@ -48,7 +48,7 @@ filter_row(
 /*! Precompute row prefixes. */
 /*----------------------------------------------------------------------------*/
 static int
-filter(
+rfilt(
   val_t const minsim,
   ind_t const nr,
   ind_t const nc,
@@ -80,6 +80,30 @@ filter(
   GC_free(tmpmax);
 
   return 0;
+}
+
+/*----------------------------------------------------------------------------*/
+/*! Precompute row prefixes. */
+/*----------------------------------------------------------------------------*/
+static int
+rstat(
+  ind_t const nr,
+  ind_t const * const ia,
+  ind_t const * const ja,
+  val_t const * const a,
+  ind_t const * const ka,
+  val_t       * const pfxmax
+)
+{
+  /* compute prefix maximums */
+  for (ind_t i = 0; i < nr; i++)
+    for(ind_t j = ia[i]; j < ka[i]; j++)
+      if (a[j] > pfxmax[i])
+        pfxmax[i] = a[j];
+
+  return 0;
+
+  (void)ja;
 }
 
 /*----------------------------------------------------------------------------*/
@@ -127,9 +151,8 @@ csrcsc(
 /*----------------------------------------------------------------------------*/
 static int
 fiidx(
-  val_t  const         minsim,
   Matrix const * const M,
-  ind_t        * const m_ka,
+  ind_t  const * const m_ka,
   Matrix       * const I
 )
 {
@@ -142,10 +165,6 @@ fiidx(
   ind_t const * const m_ia  = M->ia;
   ind_t const * const m_ja  = M->ja;
   val_t const * const m_a   = M->a;
-
-  /* precompute row prefixes */
-  int err = filter(minsim, m_nr, m_nc, m_ia, m_ja, m_a, m_ka);
-  GC_assert(!err);
 
   /* compute the size of the inverted index */
   ind_t i_nnz = 0;
@@ -181,6 +200,7 @@ pp_free(
   struct pp_payld * pp = (struct pp_payld *)ptr;
   Matrix_free(&(pp->I));
   free(pp->ka);
+  free(pp->pfxmax);
 }
 
 /*----------------------------------------------------------------------------*/
@@ -211,24 +231,38 @@ apss_allpairs_pp(
   struct pp_payld * pp = GC_malloc(sizeof(*pp));
 
   /* unpack /M/ */
-  ind_t const nr = M->nr;
+  ind_t const nr  = M->nr;
+  ind_t const nc  = M->nc;
+  ind_t const * const ia  = M->ia;
+  ind_t const * const ja  = M->ja;
+  val_t const * const a   = M->a;
 
   /* unpack /pp/ */
   Matrix * const I = &(pp->I);
 
-  /* init /ka/ */
+  /* allocate other preprocessed data memory */
   ind_t * const ka = GC_malloc(nr * sizeof(*ka));
+  val_t * const pfxmax = GC_calloc(nr, sizeof(*pfxmax));
 
   /* init /I/ */
   err = Matrix_init(I);
   GC_assert(!err);
 
-  /* ... */
-  err = fiidx(minsim, M, ka, I);
+  /* precompute row prefixes */
+  err = rfilt(minsim, nr, nc, ia, ja, a, ka);
+  GC_assert(!err);
+
+  /* precompute row prefix statistics */
+  err = rstat(nr, ia, ja, a, ka, pfxmax);
+  GC_assert(!err);
+
+  /* precompute dynamic inverted index */
+  err = fiidx(M, ka, I);
   GC_assert(!err);
 
   /* record info in /pp/ */
   pp->ka = ka;
+  pp->pfxmax = pfxmax;
 
   /* record payload in /M/ */
   M->pp = pp;

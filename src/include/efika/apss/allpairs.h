@@ -17,6 +17,7 @@ struct pp_payld
 {
   Matrix I;
   ind_t *ka;
+  val_t *pfxmax;
 };
 
 #endif /* EFIKA_APSS_ALLPAIRS_H */
