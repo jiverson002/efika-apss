@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: MIT */
 #include <string.h>
+#include <stdio.h>
 
 #include "efika/apss.h"
 #include "efika/core.h"
@@ -58,13 +59,20 @@ rfilt(
   ind_t const * const ja,
   val_t const * const a,
   ind_t       * const ka,
+  val_t       * const rowmax,
   val_t       * const colmax,
   val_t       * const pfxmax
 )
 {
+  /* compute row maximums */
+  for (ind_t i = 0; i < nr; i++)
+    for (ind_t j = ia[i]; j < ia[i + 1]; j++)
+      if (a[j] > rowmax[i])
+        rowmax[i] = a[j];
+
   /* compute column maximums */
   for (ind_t i = 0; i < nr; i++)
-    for(ind_t j = ia[i]; j < ia[i + 1]; j++)
+    for (ind_t j = ia[i]; j < ia[i + 1]; j++)
       if (a[j] > colmax[ja[j]])
         colmax[ja[j]] = a[j];
 
@@ -76,7 +84,7 @@ rfilt(
 
   /* compute prefix maximums */
   for (ind_t i = 0; i < nr; i++)
-    for(ind_t j = ia[i]; j < ka[i]; j++)
+    for (ind_t j = ia[i]; j < ka[i]; j++)
       if (a[j] > pfxmax[i])
         pfxmax[i] = a[j];
 
@@ -96,7 +104,8 @@ csrcsc(
   ind_t const * const restrict ka,
   ind_t       * const restrict ia1,
   ind_t       * const restrict ja1,
-  val_t       * const restrict acsc
+  val_t       * const restrict acsc,
+  val_t       * const restrict l1
 )
 {
   memset(ia1, 0, (nc + 1) * sizeof(*ia1));
@@ -112,9 +121,14 @@ csrcsc(
   }
 
   for (ind_t i = 0; i < nr; i++) {
+    val_t l = 0.0;
+    for (ind_t j = ia[i]; j < ka[i]; j++)
+      l += 0.5 * acsr[j] * acsr[j];
     for (ind_t j = ka[i]; j < ia[i + 1]; j++) {
-      ja1[ia1[ja[j]]]    = i;
-      acsc[ia1[ja[j]]++] = acsr[j];
+      ja1[ia1[ja[j]]]  = i;
+      acsc[ia1[ja[j]]] = acsr[j];
+      l1[ia1[ja[j]]++] = l;
+      l += 0.5 * acsr[j] * acsr[j];
     }
   }
 
@@ -130,7 +144,8 @@ static int
 fiidx(
   Matrix const * const M,
   ind_t  const * const m_ka,
-  Matrix       * const I
+  Matrix       * const I,
+  val_t ** const i_l
 )
 {
   /* ...garbage collected function... */
@@ -152,8 +167,9 @@ fiidx(
   ind_t * const i_ia = GC_malloc((m_nc + 1) * sizeof(*i_ia));
   ind_t * const i_ja = GC_malloc(i_nnz * sizeof(*i_ja));
   val_t * const i_a  = GC_malloc(i_nnz * sizeof(*i_a));
+               *i_l  = GC_malloc(i_nnz * sizeof(*i_l));
 
-  csrcsc(m_nr, m_nc, m_ia, m_ja, m_a, m_ka, i_ia, i_ja, i_a);
+  csrcsc(m_nr, m_nc, m_ia, m_ja, m_a, m_ka, i_ia, i_ja, i_a, *i_l);
 
   /* record relevant info in /I/ */
   I->nr  = m_nc;
@@ -177,6 +193,8 @@ pp_free(
   struct pp_payld * pp = (struct pp_payld *)ptr;
   Matrix_free(&(pp->I));
   free(pp->ka);
+  free(pp->l);
+  free(pp->rowmax);
   free(pp->colmax);
   free(pp->pfxmax);
 }
@@ -224,23 +242,27 @@ apss_mmjoin_pp(
 
   /* allocate memory for other preprocessed data */
   ind_t * const m_ka = GC_malloc(m_nr * sizeof(*m_ka));
+  val_t * const rowmax = GC_calloc(m_nr, sizeof(*rowmax));
   val_t * const colmax = GC_calloc(m_nc, sizeof(*colmax));
   val_t * const pfxmax = GC_calloc(m_nr, sizeof(*pfxmax));
+  val_t * i_l;
 
   /* init /I/ */
   err = Matrix_init(I);
   GC_assert(!err);
 
   /* precompute row prefixes and their statistics */
-  err = rfilt(minsim, m_nr, m_ia, m_ja, m_a, m_ka, colmax, pfxmax);
+  err = rfilt(minsim, m_nr, m_ia, m_ja, m_a, m_ka, rowmax, colmax, pfxmax);
   GC_assert(!err);
 
   /* precompute dynamic inverted index */
-  err = fiidx(M, m_ka, I);
+  err = fiidx(M, m_ka, I, &i_l);
   GC_assert(!err);
 
   /* record info in /pp/ */
   pp->ka = m_ka;
+  pp->l  = i_l;
+  pp->rowmax = rowmax;
   pp->colmax = colmax;
   pp->pfxmax = pfxmax;
 

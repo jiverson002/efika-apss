@@ -15,51 +15,13 @@
 #include "efika/data.h"
 #include "efika/io.h"
 
-namespace apss {
-
-struct idxjoin {
-  static int run(EFIKA_val_t const minsim, EFIKA_Matrix * const M,
-                 EFIKA_Matrix * const S)
-  {
-    return EFIKA_apss_idxjoin(minsim, M, S);
-  }
-};
-
-struct allpairs {
-  static int run(EFIKA_val_t const minsim, EFIKA_Matrix * const M,
-                 EFIKA_Matrix * const S)
-  {
-    return EFIKA_apss_allpairs(minsim, M, S);
-  }
-};
-
-struct mmjoin {
-  static int run(EFIKA_val_t const minsim, EFIKA_Matrix * const M,
-                 EFIKA_Matrix * const S)
-  {
-    return EFIKA_apss_mmjoin(minsim, M, S);
-  }
-};
-
-#if 0
-struct sfr {
-  int operator()(EFIKA_val_t const minsim, EFIKA_Matrix const * const M,
-                 EFIKA_Matrix const * const I, EFIKA_Matrix * const S)
-  {
-    return EFIKA_apss_sfr(minsim, M, I, S);
-  }
-};
-#endif
-
-} // apss
-
 namespace {
 
-template <typename TypeParam>
 class interface : public ::testing::Test {
   public:
-    interface(float const t, const std::string &f)
-      : minsim_(t), filename_(f) { }
+    interface(float const t, const std::string &f,
+      int (*impl)(EFIKA_val_t, EFIKA_Matrix*, EFIKA_Matrix*))
+      : minsim_(t), filename_(f), impl_(impl) { }
 
     void SetUp() override {
       int err;
@@ -68,11 +30,7 @@ class interface : public ::testing::Test {
       if (err)
         throw std::runtime_error("Could not initialize matrix");
 
-      FILE * fp = fopen((filename_).c_str(), "r");
-      if (!fp)
-        throw std::invalid_argument("Cannot open `" + filename_ + "' for reading");
-
-      err = EFIKA_IO_cluto_load(fp, &M_);
+      err = EFIKA_IO_cluto_load(filename_.c_str(), &M_);
       if (err)
         throw std::runtime_error("Could not load `" + filename_ + "'");
 
@@ -83,8 +41,6 @@ class interface : public ::testing::Test {
       err = EFIKA_Matrix_norm(&M_);
       if (err)
         throw std::runtime_error("Could not normalize matrix");
-
-      fclose(fp);
     }
 
     void TearDown() override {
@@ -100,13 +56,13 @@ class interface : public ::testing::Test {
       ASSERT_EQ(err, 0);
 
       // compute baseline number of pairs
-      err = apss::idxjoin::run(minsim_, &M_, &S);
+      err = EFIKA_apss_idxjoin(minsim_, &M_, &S);
       ASSERT_EQ(err, 0);
       auto const size_idxjoin = S.nnz;
       EFIKA_Matrix_free(&S);
 
       // find all fixed-radius pairs using /efficient/ algorithm
-      err = TypeParam::run(minsim_, &M_, &S);
+      err = impl_(minsim_, &M_, &S);
       ASSERT_EQ(err, 0);
       auto const size_efficient = S.nnz;
       EFIKA_Matrix_free(&S);
@@ -120,6 +76,7 @@ class interface : public ::testing::Test {
     float minsim_;
     std::string filename_;
     EFIKA_Matrix M_;
+    int (*impl_)(EFIKA_val_t, EFIKA_Matrix*, EFIKA_Matrix*);
 };
 
 } // namespace
@@ -131,8 +88,9 @@ class interface : public ::testing::Test {
       ::testing::RegisterTest(#impl, EFIKA_datasets[i],\
         nullptr, nullptr, __FILE__, __LINE__,\
         [=]() -> ::testing::Test* {\
-          return new interface<apss::impl>(0.90,\
-              std::string(EFIKA_DATA_PATH) + "/" + std::string(EFIKA_datasets[i]));\
+          return new interface(0.90,\
+            std::string(EFIKA_DATA_PATH"/") + std::string(EFIKA_datasets[i]),\
+            EFIKA_apss_ ## impl);\
         });\
     }\
   } while (0)
@@ -140,7 +98,7 @@ class interface : public ::testing::Test {
 int main(int argc, char *argv[]) {
   ::testing::InitGoogleTest(&argc, argv);
 
-  //REGISTER_TEST_SET(allpairs);
+  REGISTER_TEST_SET(allpairs);
   REGISTER_TEST_SET(mmjoin);
   //REGISTER_TEST_SET(sfrkd);
 
