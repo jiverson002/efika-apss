@@ -33,6 +33,14 @@ struct allpairs {
   }
 };
 
+struct mmjoin {
+  static int run(EFIKA_val_t const minsim, EFIKA_Matrix * const M,
+                 EFIKA_Matrix * const S)
+  {
+    return EFIKA_apss_mmjoin(minsim, M, S);
+  }
+};
+
 #if 0
 struct sfr {
   int operator()(EFIKA_val_t const minsim, EFIKA_Matrix const * const M,
@@ -132,7 +140,8 @@ class interface : public ::testing::Test {
 int main(int argc, char *argv[]) {
   ::testing::InitGoogleTest(&argc, argv);
 
-  REGISTER_TEST_SET(allpairs);
+  //REGISTER_TEST_SET(allpairs);
+  REGISTER_TEST_SET(mmjoin);
   //REGISTER_TEST_SET(sfrkd);
 
   return RUN_ALL_TESTS();
