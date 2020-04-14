@@ -3,7 +3,6 @@
 #include <string.h>
 
 #include "efika/apss.h"
-#include "efika/core.h"
 
 #include "efika/apss/mmjoin.h"
 #include "efika/apss/export.h"
@@ -23,9 +22,6 @@
 /*----------------------------------------------------------------------------*/
 struct cand
 {
-  /* row statistics */
-  val_t rs2;
-
   /* solution matrix entry for candidate row */
   ind_t ind;
   val_t sim;
@@ -98,7 +94,6 @@ generate(
         case UNKNOWN:
         if (allow_unknown) {
           /* initialize solution matrix entry */
-          tmpcnd[cnt].rs2 = 1.0;
           tmpcnd[cnt].ind = k;
           tmpcnd[cnt].sim = v * w;
 
@@ -111,7 +106,7 @@ generate(
         /* update partial dot product for candidate row */
         tmpcnd[m].sim += v * w;
 
-        /* Lee filter */
+        /* Lee pruning */
         if (tmpcnd[m].sim + lx + ly < minsim)
           marker[k] = PRUNED;
       }

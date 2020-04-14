@@ -3,7 +3,6 @@
 #include <string.h>
 
 #include "efika/apss.h"
-#include "efika/core.h"
 
 #include "efika/apss/allpairs.h"
 #include "efika/apss/export.h"

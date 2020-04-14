@@ -7,7 +7,6 @@
 #include "efika/apss/allpairs.h"
 #include "efika/apss/export.h"
 #include "efika/apss/rename.h"
-#include "efika/core/blas.h"
 #include "efika/core/gc.h"
 #include "efika/core/pp.h"
 

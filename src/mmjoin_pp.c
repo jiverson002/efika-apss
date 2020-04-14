@@ -1,6 +1,5 @@
 /* SPDX-License-Identifier: MIT */
 #include <string.h>
-#include <stdio.h>
 
 #include "efika/apss.h"
 #include "efika/core.h"
@@ -8,7 +7,6 @@
 #include "efika/apss/mmjoin.h"
 #include "efika/apss/export.h"
 #include "efika/apss/rename.h"
-#include "efika/core/blas.h"
 #include "efika/core/gc.h"
 #include "efika/core/pp.h"
 

@@ -1,9 +1,7 @@
 /* SPDX-License-Identifier: MIT */
 #include <stdbool.h>
-#include <string.h>
 
 #include "efika/apss.h"
-#include "efika/core.h"
 
 #include "efika/apss/idxjoin.h"
 #include "efika/apss/export.h"

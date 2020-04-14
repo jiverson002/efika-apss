@@ -11,10 +11,11 @@
 
 namespace {
 
+using impl_func = int (*)(EFIKA_val_t, EFIKA_Matrix*, EFIKA_Matrix*);
+
 class interface : public ::testing::Test {
   public:
-    interface(float const t, const std::string &f,
-      int (*impl)(EFIKA_val_t, EFIKA_Matrix*, EFIKA_Matrix*))
+    interface(float const t, const std::string &f, impl_func impl)
       : minsim_(t), filename_(f), impl_(impl) { }
 
     void SetUp() override {
@@ -70,7 +71,7 @@ class interface : public ::testing::Test {
     float minsim_;
     std::string filename_;
     EFIKA_Matrix M_;
-    int (*impl_)(EFIKA_val_t, EFIKA_Matrix*, EFIKA_Matrix*);
+    impl_func impl_;
 };
 
 } // namespace
