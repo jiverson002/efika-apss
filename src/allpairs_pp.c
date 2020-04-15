@@ -22,6 +22,7 @@ filter_row(
   val_t const * const tmpmax
 )
 {
+  ind_t j;
   val_t b1 = 0.0, mx = 0.0;
 
   /* compute row maximum */
@@ -29,18 +30,13 @@ filter_row(
     if (a[j] > mx)
       mx = a[j];
 
-  for (ind_t j = 0; j < n; j++) {
+  for (j = 0; j < n && b1 < minsim; j++) {
     /* Bayardo bound */
     b1 += a[j] * min(mx, tmpmax[ja[j]]);
-
-    if (b1 >= minsim) {
-      /* return prefix split */
-      return j;
-    }
   }
 
-  /* return end-of-row */
-  return n;
+  /* return prefix split */
+  return j - 1;
 }
 
 /*----------------------------------------------------------------------------*/

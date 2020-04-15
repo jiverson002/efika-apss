@@ -12,6 +12,8 @@
 #define apss_bruteforce  EFIKA_apss_bruteforce
 #define apss_idxjoin     EFIKA_apss_idxjoin
 #define apss_idxjoin_pp  EFIKA_apss_idxjoin_pp
+#define apss_l2ap        EFIKA_apss_l2ap
+#define apss_l2ap_pp     EFIKA_apss_l2ap_pp
 #define apss_mmjoin      EFIKA_apss_mmjoin
 #define apss_mmjoin_pp   EFIKA_apss_mmjoin_pp
 

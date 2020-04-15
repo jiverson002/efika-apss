@@ -21,12 +21,17 @@ int EFIKA_apss_bruteforce_pp(EFIKA_val_t const minsim,
                              EFIKA_Matrix * const M,
                              EFIKA_Matrix * const S);
 
-
 int EFIKA_apss_idxjoin   (EFIKA_val_t const minsim,
                           EFIKA_Matrix * const M,
                           EFIKA_Matrix * const S);
 int EFIKA_apss_idxjoin_pp(EFIKA_val_t const minsim,
                           EFIKA_Matrix * const M);
+
+int EFIKA_apss_l2ap   (EFIKA_val_t const minsim,
+                       EFIKA_Matrix * const M,
+                       EFIKA_Matrix * const S);
+int EFIKA_apss_l2ap_pp(EFIKA_val_t const minsim,
+                       EFIKA_Matrix * const M);
 
 int EFIKA_apss_mmjoin   (EFIKA_val_t const minsim,
                          EFIKA_Matrix * const M,

@@ -11,9 +11,10 @@
 
 namespace {
 
-using impl_func = int (*)(EFIKA_val_t, EFIKA_Matrix*, EFIKA_Matrix*);
-
 class interface : public ::testing::Test {
+  private:
+    using impl_func = int (*)(EFIKA_val_t, EFIKA_Matrix*, EFIKA_Matrix*);
+
   public:
     interface(float const t, const std::string &f, impl_func impl)
       : minsim_(t), filename_(f), impl_(impl) { }
@@ -94,8 +95,8 @@ int main(int argc, char *argv[]) {
   ::testing::InitGoogleTest(&argc, argv);
 
   REGISTER_TEST_SET(allpairs);
+  REGISTER_TEST_SET(l2ap);
   REGISTER_TEST_SET(mmjoin);
-  //REGISTER_TEST_SET(sfrkd);
 
   return RUN_ALL_TESTS();
 }

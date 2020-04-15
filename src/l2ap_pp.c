@@ -1,10 +1,11 @@
 /* SPDX-License-Identifier: MIT */
+#include <math.h>
 #include <string.h>
 
 #include "efika/apss.h"
 #include "efika/core.h"
 
-#include "efika/apss/mmjoin.h"
+#include "efika/apss/l2ap.h"
 #include "efika/apss/export.h"
 #include "efika/apss/rename.h"
 #include "efika/core/gc.h"
@@ -24,14 +25,15 @@ filter_row(
 )
 {
   ind_t j;
-  val_t b1 = 0.0, b2 = 0.5;
+  val_t b1 = 0.0, bt = 0.0, b3 = 0.0;
 
-  for (j = 0; j < n && min(b1, b2) < minsim; j++) {
+  for (j = 0; j < n && min(b1, b3) < minsim; j++) {
     /* Bayardo bound */
     b1 += a[j] * min(mx, colmax[ja[j]]);
 
-    /* Lee bound */
-    b2 += 0.5 * a[j] * a[j];
+   /* Anastasiu bound */
+    bt += a[j] * a[j];
+    b3  = sqrtv(bt);
   }
 
   /* return prefix split */
@@ -113,12 +115,12 @@ csrcsc(
   for (ind_t i = 0; i < nr; i++) {
     val_t l = 0.0;
     for (ind_t j = ia[i]; j < ka[i]; j++)
-      l += 0.5 * acsr[j] * acsr[j];
+      l += acsr[j] * acsr[j];
     for (ind_t j = ka[i]; j < ia[i + 1]; j++) {
       ja1[ia1[ja[j]]]  = i;
       acsc[ia1[ja[j]]] = acsr[j];
-      l1[ia1[ja[j]]++] = l;
-      l += 0.5 * acsr[j] * acsr[j];
+      l1[ia1[ja[j]]++] = sqrtv(l);
+      l += acsr[j] * acsr[j];
     }
   }
 
@@ -193,7 +195,7 @@ pp_free(
 /*! Function to preprocess matrix for APSS. */
 /*----------------------------------------------------------------------------*/
 EFIKA_APSS_EXPORT int
-apss_mmjoin_pp(
+apss_l2ap_pp(
   val_t const minsim,
   Matrix * const M
 )
