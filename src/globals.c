@@ -7,9 +7,9 @@
 /*----------------------------------------------------------------------------*/
 /*! Counters. */
 /*----------------------------------------------------------------------------*/
-EFIKA_APSS_EXPORT unsigned long apss_ncand;
-EFIKA_APSS_EXPORT unsigned long apss_nprun;
-EFIKA_APSS_EXPORT unsigned long apss_nvdot;
-EFIKA_APSS_EXPORT unsigned long apss_nsims;
-EFIKA_APSS_EXPORT unsigned long apss_nmacs1;
-EFIKA_APSS_EXPORT unsigned long apss_nmacs2;
+EFIKA_APSS_EXPORT unsigned long apss_ncand = 0;
+EFIKA_APSS_EXPORT unsigned long apss_nprun = 0;
+EFIKA_APSS_EXPORT unsigned long apss_nvdot = 0;
+EFIKA_APSS_EXPORT unsigned long apss_nsims = 0;
+EFIKA_APSS_EXPORT unsigned long apss_nmacs1 = 0;
+EFIKA_APSS_EXPORT unsigned long apss_nmacs2 = 0;
