@@ -5,6 +5,16 @@
 #include "efika/core/rename.h"
 
 /*----------------------------------------------------------------------------*/
+/*! Global counter variables. */
+/*----------------------------------------------------------------------------*/
+#define apss_ncand  EFIKA_apss_ncand
+#define apss_nprun  EFIKA_apss_nprun
+#define apss_nvdot  EFIKA_apss_nvdot
+#define apss_nsims  EFIKA_apss_nsims
+#define apss_nmacs1 EFIKA_apss_nmacs1
+#define apss_nmacs2 EFIKA_apss_nmacs2
+
+/*----------------------------------------------------------------------------*/
 /*! Public API. */
 /*----------------------------------------------------------------------------*/
 #define apss_allpairs    EFIKA_apss_allpairs

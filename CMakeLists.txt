@@ -26,8 +26,8 @@ generate_export_header(${PROJECT_NAME}
 
 target_sources(${PROJECT_NAME}
   PRIVATE src/allpairs.c src/allpairs_pp.c src/bruteforce.c src/bruteforce_pp.c
-          src/idxjoin.c src/idxjoin_pp.c src/l2ap.c src/l2ap_pp.c src/mmjoin.c
-          src/mmjoin_pp.c #[[src/sfr.c]])
+          src/globals.c src/idxjoin.c src/idxjoin_pp.c src/l2ap.c src/l2ap_pp.c
+          src/mmjoin.c src/mmjoin_pp.c #[[src/sfr.c]])
 
 target_include_directories(${PROJECT_NAME}
   PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/include

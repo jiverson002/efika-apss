@@ -99,6 +99,9 @@ generate(
 
           /* populate marker */
           marker[k] = cnt++;
+
+          /* update global counter */
+          apss_nmacs1++;
         }
         break;
 
@@ -109,6 +112,9 @@ generate(
         /* Lee pruning */
         if (tmpcnd[m].sim + lx + ly < minsim)
           marker[k] = PRUNED;
+
+        /* update global counter */
+        apss_nmacs1++;
       }
     }
 
@@ -157,8 +163,12 @@ verify(
     marker[k] = UNKNOWN;
 
     /* ... */
-    if (PRUNED == m)
+    if (PRUNED == m) {
+      /* update global counter */
+      apss_nprun++;
+
       continue;
+    }
 
     /* Bayardo filter */
     if (s + min(ka[k] - ia[k], len) * mx * pfxmax[k] < minsim)
@@ -170,6 +180,10 @@ verify(
       ind_t const jjj = jj - 1;
       if (tmpspa[ja[jjj]] > 0.0) {
         s += tmpspa[ja[jjj]] * a[jjj];
+
+        /* update global counter */
+        apss_nmacs2++;
+
         if (unmatched > 1) {
           if (s + tmpl[ja[jjj]] + l[jjj] < minsim) {
             s = 0.0;
@@ -187,6 +201,9 @@ verify(
       tmpcnd[ncnt].ind   = k;
       tmpcnd[ncnt++].sim = s;
     }
+
+    /* update global counter */
+    apss_nvdot++;
   }
 
   BLAS_vsctrz(ia[i + 1] - ia[i], ja + ia[i], tmpl);
@@ -265,6 +282,14 @@ apss_mmjoin(
   for (ind_t i = 0; i < m_nr; i++)
     marker[i] = UNKNOWN;
 
+  /* reset global counters */
+  apss_ncand = 0;
+  apss_nprun = 0;
+  apss_nvdot = 0;
+  apss_nsims = 0;
+  apss_nmacs1 = 0;
+  apss_nmacs2 = 0;
+
   /* find similar neighbors for each query vector */
   s_ia[0] = 0;
   for (ind_t i = 0; i < m_nr; i++) {
@@ -276,6 +301,10 @@ apss_mmjoin(
     /* verify candidate vectors */
     ind_t const ncnt = verify(minsim, cnt, i, m_ia, m_ja, m_ka, m_a, m_l,
                               rowmax, pfxmax, marker, tmpl, tmpspa, tmpcnd);
+
+    /* update global counters */
+    apss_ncand += cnt;
+    apss_nsims += ncnt;
 
     /* _vector_ resize */
     if (nnz + ncnt >= cap) {

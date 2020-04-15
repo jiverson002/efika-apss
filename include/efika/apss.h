@@ -4,6 +4,16 @@
 
 #include "efika/core.h"
 
+/*----------------------------------------------------------------------------*/
+/*! Various counters. */
+/*----------------------------------------------------------------------------*/
+extern unsigned long EFIKA_apss_ncand;
+extern unsigned long EFIKA_apss_nprun;
+extern unsigned long EFIKA_apss_nvdot;
+extern unsigned long EFIKA_apss_nsims;
+extern unsigned long EFIKA_apss_nmacs1;
+extern unsigned long EFIKA_apss_nmacs2;
+
 #ifdef __cplusplus
 extern "C" {
 #endif

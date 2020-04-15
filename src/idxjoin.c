@@ -66,11 +66,17 @@ generate(
 
         /* populate marker */
         marker[k] = cnt++;
+
+        /* update global counter */
+        apss_nmacs1++;
         break;
 
         default:
         /* update partial dot product for candidate row */
         tmpcnd[m].sim += v * w;
+
+        /* update global counter */
+        apss_nmacs1++;
       }
     }
   }
@@ -110,6 +116,9 @@ verify(
       tmpcnd[ncnt].ind   = k;
       tmpcnd[ncnt++].sim = s;
     }
+
+    /* update global counter */
+    apss_nvdot++;
   }
 
   BLAS_vsctrz(ia[i + 1] - ia[i], ja + ia[i], tmpspa);
@@ -175,6 +184,14 @@ apss_idxjoin(
   for (ind_t i = 0; i < m_nr; i++)
     marker[i] = UNKNOWN;
 
+  /* reset global counters */
+  apss_ncand = 0;
+  apss_nprun = 0;
+  apss_nvdot = 0;
+  apss_nsims = 0;
+  apss_nmacs1 = 0;
+  apss_nmacs2 = 0;
+
   /* find similar neighbors for each query vector */
   s_ia[0] = 0;
   for (ind_t i = 0; i < m_nr; i++) {
@@ -185,6 +202,10 @@ apss_idxjoin(
     /* verify candidate vectors */
     ind_t const ncnt = verify(minsim, cnt, i, m_ia, m_ja, m_a, marker, tmpspa,
                               tmpcnd);
+
+    /* update global counters */
+    apss_ncand += cnt;
+    apss_nsims += ncnt;
 
     /* _vector_ resize */
     if (nnz + ncnt >= cap) {

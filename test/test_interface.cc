@@ -54,7 +54,7 @@ class interface : public ::testing::Test {
       // compute baseline number of pairs
       err = EFIKA_apss_idxjoin(minsim_, &M_, &S);
       ASSERT_EQ(err, 0);
-      auto const size_idxjoin = S.nnz;
+      auto const size_baseline = S.nnz;
       EFIKA_Matrix_free(&S);
 
       // find all fixed-radius pairs using /efficient/ algorithm
@@ -63,9 +63,9 @@ class interface : public ::testing::Test {
       auto const size_efficient = S.nnz;
       EFIKA_Matrix_free(&S);
 
-      std::cout << size_idxjoin << " " << size_efficient << std::endl;
+      std::cout << size_baseline << " " << size_efficient << std::endl;
 
-      ASSERT_EQ(size_idxjoin, size_efficient);
+      ASSERT_EQ(size_baseline, size_efficient);
     }
 
   private:
