@@ -34,6 +34,8 @@ filter_row(
    /* Anastasiu bound */
     bt += a[j] * a[j];
     b3  = sqrtv(bt);
+
+    //pscore[ii] = min(b1, b3);
   }
 
   /* return prefix split */
@@ -53,15 +55,10 @@ rfilt(
   ind_t       * const ka,
   val_t       * const rowmax,
   val_t       * const colmax,
-  val_t       * const pfxmax
+  val_t       * const pfxmax,
+  val_t       * const pscore
 )
 {
-  /* compute row maximums */
-  for (ind_t i = 0; i < nr; i++)
-    for (ind_t j = ia[i]; j < ia[i + 1]; j++)
-      if (a[j] > rowmax[i])
-        rowmax[i] = a[j];
-
   /* compute column maximums */
   for (ind_t i = 0; i < nr; i++)
     for (ind_t j = ia[i]; j < ia[i + 1]; j++)
@@ -69,16 +66,29 @@ rfilt(
         colmax[ja[j]] = a[j];
 
   /* find the prefixes in the matrix */
-  for (ind_t i = 0; i < nr; i++)
+  for (ind_t i = 0; i < nr; i++) {
+    /* compute row maximums */
+    for (ind_t j = ia[i]; j < ia[i + 1]; j++)
+      if (a[j] > rowmax[i])
+        rowmax[i] = a[j];
+
     /* find prefix split for each row_i */
     ka[i] = ia[i] + filter_row(minsim, rowmax[i], ia[i + 1] - ia[i], ja + ia[i],
                                a + ia[i], colmax);
 
-  /* compute prefix maximums */
-  for (ind_t i = 0; i < nr; i++)
+    /* compute prefix maximums */
     for (ind_t j = ia[i]; j < ka[i]; j++)
       if (a[j] > pfxmax[i])
         pfxmax[i] = a[j];
+
+    /* compute pscores */
+    val_t b1 = 0.0, bt = 0.0;
+    for (ind_t j = ia[i]; j < ka[i]; j++) {
+      b1 += a[j] * min(rowmax[i], colmax[ja[j]]);
+      bt += a[j] * a[j];
+    }
+    pscore[i] = min(b1, sqrtv(bt));
+  }
 
   return 0;
 }
@@ -187,8 +197,8 @@ pp_free(
   free(pp->ka);
   free(pp->l);
   free(pp->rowmax);
-  free(pp->colmax);
   free(pp->pfxmax);
+  free(pp->pscore);
 }
 
 /*----------------------------------------------------------------------------*/
@@ -235,16 +245,20 @@ apss_l2ap_pp(
   /* allocate memory for other preprocessed data */
   ind_t * const m_ka = GC_malloc(m_nr * sizeof(*m_ka));
   val_t * const rowmax = GC_calloc(m_nr, sizeof(*rowmax));
-  val_t * const colmax = GC_calloc(m_nc, sizeof(*colmax));
   val_t * const pfxmax = GC_calloc(m_nr, sizeof(*pfxmax));
+  val_t * const pscore = GC_calloc(m_nr, sizeof(*pscore));
   val_t * i_l;
+
+  /* allocate scratch memory */
+  val_t * const colmax = GC_calloc(m_nc, sizeof(*colmax));
 
   /* init /I/ */
   err = Matrix_init(I);
   GC_assert(!err);
 
   /* precompute row prefixes and their statistics */
-  err = rfilt(minsim, m_nr, m_ia, m_ja, m_a, m_ka, rowmax, colmax, pfxmax);
+  err = rfilt(minsim, m_nr, m_ia, m_ja, m_a, m_ka, rowmax, colmax, pfxmax,
+              pscore);
   GC_assert(!err);
 
   /* precompute dynamic inverted index */
@@ -255,12 +269,15 @@ apss_l2ap_pp(
   pp->ka = m_ka;
   pp->l  = i_l;
   pp->rowmax = rowmax;
-  pp->colmax = colmax;
   pp->pfxmax = pfxmax;
+  pp->pscore = pscore;
 
   /* record payload in /M/ */
   M->pp = pp;
   M->pp_free = &pp_free;
+
+  /* free scratch memory */
+  GC_free(colmax);
 
   return 0;
 }

@@ -19,8 +19,8 @@ struct pp_payld
   ind_t *ka;
   val_t *l;
   val_t *rowmax;
-  val_t *colmax;
   val_t *pfxmax;
+  val_t *pscore;
 };
 
 #endif /* EFIKA_APSS_L2AP_H */

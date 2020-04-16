@@ -174,7 +174,7 @@ verify(
     if (s + min(ka[k] - ia[k], len) * mx * pfxmax[k] < minsim)
       continue;
 
-    /* Lee filter */
+    /* Lee dot product */
     ind_t unmatched = 0;
     for(ind_t jj = ka[k]; jj > ia[k]; jj--){
       ind_t const jjj = jj - 1;

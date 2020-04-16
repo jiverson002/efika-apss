@@ -144,6 +144,7 @@ verify(
   val_t const * const restrict l,
   val_t const * const restrict rowmax,
   val_t const * const restrict pfxmax,
+  val_t const * const restrict pscore,
   ind_t       * const restrict marker,
   val_t       * const restrict tmpl,
   val_t       * const restrict tmpspa,
@@ -175,7 +176,11 @@ verify(
     if (s + min(ka[k] - ia[k], len) * mx * pfxmax[k] < minsim)
       continue;
 
-    /* Anastasiu filter */
+    /* pscore filter */
+    if (s + pscore[k] < minsim)
+      continue;
+
+    /* Anastasiu dot product */
     for(ind_t jj = ka[k]; jj > ia[k]; jj--){
       ind_t const jjj = jj - 1;
       if (tmpspa[ja[jjj]] > 0.0) {
@@ -247,8 +252,8 @@ apss_l2ap(
   ind_t  const * const m_ka = pp->ka;
   val_t  const * const i_l  = pp->l;
   val_t  const * const rowmax = pp->rowmax;
-  val_t  const * const colmax = pp->colmax;
   val_t  const * const pfxmax = pp->pfxmax;
+  val_t  const * const pscore = pp->pscore;
 
   /* unpack /I/ */
   ind_t const * const i_ia = I->ia;
@@ -266,6 +271,7 @@ apss_l2ap(
   val_t       * const m_l    = GC_malloc(m_nnz * sizeof(*m_l));
   ind_t       * const i_ra   = GC_malloc(m_nc * sizeof(*i_ra));
   ind_t       * const marker = GC_malloc(m_nr * sizeof(*marker));
+  val_t       * const colmax = GC_calloc(m_nc, sizeof(*colmax));
   val_t       * const tmpl   = GC_calloc(m_nc, sizeof(*tmpl));
   val_t       * const tmpspa = GC_calloc(m_nc, sizeof(*tmpspa));
   struct cand * const tmpcnd = GC_malloc(m_nr * sizeof(*tmpcnd));
@@ -295,11 +301,17 @@ apss_l2ap(
 
     /* verify candidate vectors */
     ind_t const ncnt = verify(minsim, cnt, i, m_ia, m_ja, m_ka, m_a, m_l,
-                              rowmax, pfxmax, marker, tmpl, tmpspa, tmpcnd);
+                              rowmax, pfxmax, pscore, marker, tmpl, tmpspa,
+                              tmpcnd);
 
     /* update global counters */
     apss_ncand += cnt;
     apss_nsims += ncnt;
+
+    /* update column maximums */
+    for (ind_t j = m_ia[i]; j < m_ia[i + 1]; j++)
+      if (m_a[j] > colmax[m_ja[j]])
+        colmax[m_ja[j]] = m_a[j];
 
     /* _vector_ resize */
     if (nnz + ncnt >= cap) {
@@ -339,6 +351,7 @@ apss_l2ap(
   GC_free(m_l);
   GC_free(i_ra);
   GC_free(marker);
+  GC_free(colmax);
   GC_free(tmpl);
   GC_free(tmpspa);
   GC_free(tmpcnd);
