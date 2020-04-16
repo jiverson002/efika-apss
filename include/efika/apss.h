@@ -48,6 +48,12 @@ int EFIKA_apss_mmjoin   (EFIKA_val_t const minsim,
 int EFIKA_apss_mmjoin_pp(EFIKA_val_t const minsim,
                          EFIKA_Matrix * const M);
 
+int EFIKA_apss_nova   (EFIKA_val_t const minsim,
+                       EFIKA_Matrix * const M,
+                       EFIKA_Matrix * const S);
+int EFIKA_apss_nova_pp(EFIKA_val_t const minsim,
+                       EFIKA_Matrix * const M);
+
 #if 0
 int EFIKA_apss_sfr(EFIKA_val_t const minsim,
                    EFIKA_Matrix const * const M,

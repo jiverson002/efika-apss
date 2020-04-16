@@ -26,6 +26,8 @@
 #define apss_l2ap_pp     EFIKA_apss_l2ap_pp
 #define apss_mmjoin      EFIKA_apss_mmjoin
 #define apss_mmjoin_pp   EFIKA_apss_mmjoin_pp
+#define apss_nova        EFIKA_apss_nova
+#define apss_nova_pp     EFIKA_apss_nova_pp
 
 #define apss_sfr0d EFIKA_apss_sfr0d
 #define apss_sfrkd EFIKA_apss_sfrkd
