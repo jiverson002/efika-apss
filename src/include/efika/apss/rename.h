@@ -17,17 +17,18 @@
 /*----------------------------------------------------------------------------*/
 /*! Public API. */
 /*----------------------------------------------------------------------------*/
-#define apss_allpairs    EFIKA_apss_allpairs
-#define apss_allpairs_pp EFIKA_apss_allpairs_pp
-#define apss_bruteforce  EFIKA_apss_bruteforce
-#define apss_idxjoin     EFIKA_apss_idxjoin
-#define apss_idxjoin_pp  EFIKA_apss_idxjoin_pp
-#define apss_l2ap        EFIKA_apss_l2ap
-#define apss_l2ap_pp     EFIKA_apss_l2ap_pp
-#define apss_mmjoin      EFIKA_apss_mmjoin
-#define apss_mmjoin_pp   EFIKA_apss_mmjoin_pp
-#define apss_nova        EFIKA_apss_nova
-#define apss_nova_pp     EFIKA_apss_nova_pp
+#define apss_allpairs      EFIKA_apss_allpairs
+#define apss_allpairs_pp   EFIKA_apss_allpairs_pp
+#define apss_bruteforce    EFIKA_apss_bruteforce
+#define apss_bruteforce_pp EFIKA_apss_bruteforce_pp
+#define apss_idxjoin       EFIKA_apss_idxjoin
+#define apss_idxjoin_pp    EFIKA_apss_idxjoin_pp
+#define apss_l2ap          EFIKA_apss_l2ap
+#define apss_l2ap_pp       EFIKA_apss_l2ap_pp
+#define apss_mmjoin        EFIKA_apss_mmjoin
+#define apss_mmjoin_pp     EFIKA_apss_mmjoin_pp
+#define apss_nova          EFIKA_apss_nova
+#define apss_nova_pp       EFIKA_apss_nova_pp
 
 #define apss_sfr0d EFIKA_apss_sfr0d
 #define apss_sfrkd EFIKA_apss_sfrkd
