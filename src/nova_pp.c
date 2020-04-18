@@ -12,10 +12,17 @@
 #include "efika/core/pp.h"
 
 /*----------------------------------------------------------------------------*/
+/* Junk row statistics. */
+/*----------------------------------------------------------------------------*/
+typedef struct {
+  val_t pscore;
+} Junk;
+
+/*----------------------------------------------------------------------------*/
 /* Precompute prefix for a single row. */
 /*----------------------------------------------------------------------------*/
 static inline ind_t
-filter_row(
+filt_row(
   val_t const minsim,
   val_t const mx,
   ind_t const n,
@@ -51,6 +58,66 @@ filter_row(
 }
 
 /*----------------------------------------------------------------------------*/
+/* Precompute prefix statistics for a single row. */
+/*----------------------------------------------------------------------------*/
+static inline void
+stat_row(
+  ind_t const n,
+  ind_t const * const ja,
+  val_t const * const a,
+  val_t       * const max,
+  val_t       * const sum,
+  val_t       * const len
+)
+{
+  val_t sum2 = a[0] * a[0];
+
+  max[0] = a[0];
+  sum[0] = a[0];
+  len[0] = a[0];
+  for (ind_t j = 1; j < n; j++) {
+    /* prefix maximums */
+    max[j] = max(max[j - 1], a[j]);
+
+    /* prefix sums */
+    sum[j] = sum[j - 1] + a[j];
+
+    /* prefix lengths */
+    sum2   += a[j] * a[j];
+    len[j]  = sqrtv(sum2);
+  }
+
+  (void)ja;
+}
+
+/*----------------------------------------------------------------------------*/
+/* Precompute junk prefix statistics for a single row. */
+/*----------------------------------------------------------------------------*/
+static inline Junk
+junk_row(
+  val_t const mx,
+  ind_t const n,
+  ind_t const * const ja,
+  val_t const * const a,
+  val_t const * const colmax,
+  val_t       * const rs1
+)
+{
+  val_t b1 = 0.0, bt = 0.0, b3 = 0.0;
+
+  for (ind_t j = 0; j < n; j++) {
+    /* compute pscores */
+    rs1[j] = b1;
+
+    b1 += a[j] * min(mx, colmax[ja[j]]);
+    bt += a[j] * a[j];
+    b3  = sqrtv(bt);
+  }
+
+  return (Junk){ min(b1, b3) };
+}
+
+/*----------------------------------------------------------------------------*/
 /*! Precompute row prefixes. */
 /*----------------------------------------------------------------------------*/
 static int
@@ -63,11 +130,10 @@ rfilt(
   val_t const * const a,
   ind_t       * const ka,
   val_t       * const rs1,
-  val_t       * const rs3,
   val_t       * const sum,
   val_t       * const max,
+  val_t       * const len,
   val_t       * const rowmax,
-  val_t       * const pfxmax,
   val_t       * const pscore
 )
 {
@@ -86,43 +152,25 @@ rfilt(
         rowmax[i] = a[j];
 
     /* find prefix split for each row_i */
-    ka[i] = ia[i] + filter_row(minsim, rowmax[i], ia[i + 1] - ia[i], ja + ia[i],
-                               a + ia[i], colmax);
+    ka[i] = ia[i] + filt_row(minsim, rowmax[i], ia[i + 1] - ia[i], ja + ia[i],
+                             a + ia[i], colmax);
+
+    /* compute prefix stats for each row_i */
+    stat_row(ia[i + 1] - ia[i], ja + ia[i], a + ia[i], max + ia[i],
+             sum + ia[i], len + ia[i]);
+
+    /* XXX: Keeping column prefix max and sum across all columns could be a good
+     *      use for a fenwick tree. */
+
+    /* compute prefix maximums */
+    Junk stat = junk_row(rowmax[i], ka[i] - ia[i], ja + ia[i], a + ia[i],
+                         colmax, rs1 + ia[i]);
+    pscore[i] = stat.pscore;
 
     /* XXX: (improvement) update column maximums */
     for (ind_t j = ia[i]; j < ia[i + 1]; j++)
       if (a[j] > colmax[ja[j]])
         colmax[ja[j]] = a[j];
-
-    /* compute prefix sums */
-    sum[ia[i]] = a[ia[i]];
-    for (ind_t j = ia[i] + 1; j < ia[i + 1]; j++)
-      sum[j] = sum[j - 1] + a[j];
-
-    /* compute prefix maximums */
-    max[ia[i]] = a[ia[i]];
-    for (ind_t j = ia[i] + 1; j < ia[i + 1]; j++)
-      max[j] = max(max[j - 1], a[j]);
-
-    /* XXX: Keeping column prefix max and sum across all columns could be a good
-     * use for a fenwick tree */
-
-    /* compute prefix maximums */
-    for (ind_t j = ia[i]; j < ka[i]; j++)
-      if (a[j] > pfxmax[i])
-        pfxmax[i] = a[j];
-
-    /* compute pscores */
-    val_t b1 = 0.0, bt = 0.0, b3 = 0.0;
-    for (ind_t j = ia[i]; j < ka[i]; j++) {
-      rs1[j] = b1;
-      rs3[j] = b3;
-
-      b1 += a[j] * min(rowmax[i], colmax[ja[j]]);
-      bt += a[j] * a[j];
-      b3  = sqrtv(bt);
-    }
-    pscore[i] = min(b1, b3);
   }
 
   /* reset colmax */
@@ -144,7 +192,6 @@ rfilt(
       b3  = bt < 0.0 ? 0.0 : sqrtv(bt);
 
       rs1[j] = b1;
-      rs3[j] = b3;
     }
 
     /* update column maximums */
@@ -172,12 +219,13 @@ csrcsc(
   val_t const * const restrict acsr,
   val_t const * const restrict sum,
   val_t const * const restrict max,
+  val_t const * const restrict len,
   ind_t       * const restrict ia1,
   ind_t       * const restrict ja1,
   val_t       * const restrict acsc,
-  val_t       * const restrict rs31,
   val_t       * const restrict sum1,
-  val_t       * const restrict max1
+  val_t       * const restrict max1,
+  val_t       * const restrict len1
 )
 {
   memset(ia1, 0, (nc + 1) * sizeof(*ia1));
@@ -199,9 +247,9 @@ csrcsc(
     for (ind_t j = ka[i]; j < ia[i + 1]; j++) {
       ja1[ia1[ja[j]]]    = i;
       acsc[ia1[ja[j]]]   = acsr[j];
-      rs31[ia1[ja[j]]]   = sqrtv(rst);
       sum1[ia1[ja[j]]]   = sum[j];
-      max1[ia1[ja[j]]++] = max[j];
+      max1[ia1[ja[j]]]   = max[j];
+      len1[ia1[ja[j]]++] = len[j];
       rst += acsr[j] * acsr[j];
     }
   }
@@ -220,10 +268,11 @@ fiidx(
   ind_t  const * const m_ka,
   val_t  const * const m_sum,
   val_t  const * const m_max,
+  val_t  const * const m_len,
   Matrix       * const I,
-  val_t ** const i_rs3,
   val_t ** const i_sum,
-  val_t ** const i_max
+  val_t ** const i_max,
+  val_t ** const i_len
 )
 {
   /* ...garbage collected function... */
@@ -245,12 +294,12 @@ fiidx(
   ind_t * const i_ia  = GC_malloc((m_nc + 1) * sizeof(*i_ia));
   ind_t * const i_ja  = GC_malloc(i_nnz * sizeof(*i_ja));
   val_t * const i_a   = GC_malloc(i_nnz * sizeof(*i_a));
-               *i_rs3 = GC_malloc(i_nnz * sizeof(*i_rs3));
                *i_sum = GC_malloc(i_nnz * sizeof(*i_sum));
                *i_max = GC_malloc(i_nnz * sizeof(*i_max));
+               *i_len = GC_malloc(i_nnz * sizeof(*i_len));
 
-  csrcsc(m_nr, m_nc, m_ia, m_ja, m_ka, m_a, m_sum, m_max, i_ia, i_ja, i_a,
-         *i_rs3, *i_sum, *i_max);
+  csrcsc(m_nr, m_nc, m_ia, m_ja, m_ka, m_a, m_sum, m_max, m_len, i_ia, i_ja,
+         i_a, *i_sum, *i_max, *i_len);
 
   /* record relevant info in /I/ */
   I->nr  = m_nc;
@@ -329,15 +378,16 @@ pp_free(
   Matrix_free(&(pp->I));
   free(pp->ka);
   free(pp->ra);
-  free(pp->m_rs1);
-  free(pp->m_rs3);
+
   free(pp->m_sum);
   free(pp->m_max);
-  free(pp->i_rs3);
+  free(pp->m_len);
+
   free(pp->i_sum);
   free(pp->i_max);
-  free(pp->rowmax);
-  free(pp->pfxmax);
+  free(pp->i_len);
+
+  free(pp->m_rs1);
   free(pp->pscore);
 }
 
@@ -387,27 +437,28 @@ apss_nova_pp(
   ind_t * const m_ka  = GC_malloc(m_nr * sizeof(*m_ka));
   ind_t * const m_ra  = GC_malloc(m_nnz * sizeof(*m_ra));
   val_t * const m_rs1 = GC_malloc(m_nnz * sizeof(*m_rs1));
-  val_t * const m_rs3 = GC_malloc(m_nnz * sizeof(*m_rs3));
   val_t * const m_sum = GC_calloc(m_nnz, sizeof(*m_sum));
   val_t * const m_max = GC_calloc(m_nnz, sizeof(*m_max));
-  val_t * const rowmax = GC_calloc(m_nr, sizeof(*rowmax));
-  val_t * const pfxmax = GC_calloc(m_nr, sizeof(*pfxmax));
+  val_t * const m_len = GC_calloc(m_nnz, sizeof(*m_len));
   val_t * const pscore = GC_calloc(m_nr, sizeof(*pscore));
-  val_t * i_rs3;
   val_t * i_sum;
   val_t * i_max;
+  val_t * i_len;
+
+  /* allocate scratch memory */
+  val_t * const rowmax = GC_calloc(m_nr, sizeof(*rowmax));
 
   /* init /I/ */
   err = Matrix_init(I);
   GC_assert(!err);
 
   /* precompute row prefixes and their statistics */
-  err = rfilt(minsim, m_nr, m_nc, m_ia, m_ja, m_a, m_ka, m_rs1, m_rs3, m_sum,
-              m_max, rowmax, pfxmax, pscore);
+  err = rfilt(minsim, m_nr, m_nc, m_ia, m_ja, m_a, m_ka, m_rs1, m_sum, m_max,
+              m_len, rowmax, pscore);
   GC_assert(!err);
 
   /* precompute dynamic inverted index */
-  err = fiidx(M, m_ka, m_sum, m_max, I, &i_rs3, &i_sum, &i_max);
+  err = fiidx(M, m_ka, m_sum, m_max, m_len, I, &i_sum, &i_max, &i_len);
   GC_assert(!err);
 
   /* precompute dynamic inverted index */
@@ -417,20 +468,22 @@ apss_nova_pp(
   /* record info in /pp/ */
   pp->ka    = m_ka;
   pp->ra    = m_ra;
-  pp->m_rs1 = m_rs1;
-  pp->m_rs3 = m_rs3;
   pp->m_sum = m_sum;
   pp->m_max = m_max;
-  pp->i_rs3 = i_rs3;
+  pp->m_len = m_len;
   pp->i_sum = i_sum;
   pp->i_max = i_max;
-  pp->rowmax = rowmax;
-  pp->pfxmax = pfxmax;
+  pp->i_len = i_len;
+
+  pp->m_rs1 = m_rs1;
   pp->pscore = pscore;
 
   /* record payload in /M/ */
   M->pp = pp;
   M->pp_free = &pp_free;
+
+  /* free scratch memory */
+  GC_free(rowmax);
 
   return 0;
 }

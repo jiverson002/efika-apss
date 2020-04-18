@@ -43,18 +43,17 @@ generate(
   ind_t const * const restrict m_ra,
   val_t const * const restrict m_a,
   val_t const * const restrict m_rs1,
-  val_t const * const restrict m_rs3,
-  val_t const * const restrict m_sum,
+  val_t const * const restrict m_len,
   ind_t const * const restrict i_ia,
   ind_t const * const restrict i_ja,
   val_t const * const restrict i_a,
-  val_t const * const restrict i_rs3,
+  val_t const * const restrict i_len,
   ind_t       * const restrict marker,
   struct cand * const restrict tmpcnd
 )
 {
   ind_t cnt = 0;
-  val_t rs1 = 1.0, rs3 = 1.0, sum = 1.0;
+  val_t rs1 = 1.0;
 
   /* iterate through each non-zero column, j, for this row */
   for (ind_t jj = m_ia[i + 1]; jj > m_ia[i]; jj--) {
@@ -62,13 +61,14 @@ generate(
     val_t const v    = m_a[jj - 1];
     ind_t const i_ra = m_ra[jj - 1];
 
+    /* retrieve precomputed values */
+    val_t const len = m_len[jj - 1];
+
     /* determine if any new candidates should be allowed */
-    bool const allow_unknown  = /* jj > m_ka[i] && */ min(rs1, rs3) >= minsim;
+    bool const allow_unknown  = /* jj > m_ka[i] && */ min(rs1, len) >= minsim;
 
     /* retrieve precomputed values */
     rs1 = m_rs1[jj - 1];
-    rs3 = m_rs3[jj - 1];
-    sum = m_sum[jj - 1];
 
     /* iterate through the rows, k,  that have indexed column j */
     for (ind_t kk = i_ra; kk < i_ia[j + 1]; kk++) {
@@ -99,12 +99,14 @@ generate(
         break;
 
         default:
+        /* Anastasiu pruning */
+        if (tmpcnd[m].sim + len * i_len[kk] < minsim) {
+          marker[k] = PRUNED;
+          break;
+        }
+
         /* update partial dot product for candidate row */
         tmpcnd[m].sim += v * w;
-
-        /* Anastasiu pruning */
-        if (tmpcnd[m].sim + rs3 * i_rs3[kk] < minsim)
-          marker[k] = PRUNED;
 
         /* update global counter */
         apss_nmacs1++;
@@ -129,26 +131,26 @@ verify(
   ind_t const * const restrict ja,
   ind_t const * const restrict ka,
   val_t const * const restrict a,
-  val_t const * const restrict rs3,
   val_t const * const restrict sum,
   val_t const * const restrict max,
-  val_t const * const restrict rowmax,
-  val_t const * const restrict pfxmax,
+  val_t const * const restrict len,
   val_t const * const restrict pscore,
   ind_t       * const restrict marker,
-  val_t       * const restrict tmprs3,
   val_t       * const restrict tmpsum,
   val_t       * const restrict tmpmax,
+  val_t       * const restrict tmplen,
   val_t       * const restrict tmpspa,
   struct cand * const restrict tmpcnd
 )
 {
-  ind_t ncnt = 0, len = ia[i + 1] - ia[i];
+  ind_t ncnt = 0;
+  ind_t const ln = ia[i + 1] - ia[i];
+  val_t const mx = max[ia[i + 1] - 1];
 
   BLAS_vsctr(ia[i + 1] - ia[i],   a + ia[i], ja + ia[i], tmpspa);
-  BLAS_vsctr(ia[i + 1] - ia[i], rs3 + ia[i], ja + ia[i], tmprs3);
   BLAS_vsctr(ia[i + 1] - ia[i], sum + ia[i], ja + ia[i], tmpsum);
   BLAS_vsctr(ia[i + 1] - ia[i], max + ia[i], ja + ia[i], tmpmax);
+  BLAS_vsctr(ia[i + 1] - ia[i], len + ia[i], ja + ia[i], tmplen);
 
   for (ind_t j = 0; j < cnt; j++) {
     ind_t const k = tmpcnd[j].ind;
@@ -168,31 +170,44 @@ verify(
 
     /* -----------------------------------------------------------------------*/
     val_t const ub1 = min(
-      min(len, ka[k] - ia[k]) * rowmax[i] * pfxmax[k], /* Bayardo */
-      pscore[k]                                        /* pscore  */
+      min(ln, ka[k] - ia[k]) * mx * max[ka[k] - 1], /* Bayardo */
+      pscore[k]                                     /* pscore  */
     );
     if (s + ub1 < minsim)
       continue;
 
+#if 0
     /* -----------------------------------------------------------------------*/
     /* fast-forward to next matching column */
     ind_t jjp1;
     for (jjp1 = ka[k]; jjp1 > ia[k] && tmpspa[ja[jjp1 - 1]] == 0.0; jjp1--);
+    ind_t const jj = jjp1 - 1;
+
+    /* no more matching columns */
+    if (jjp1 == ia[k] && s < minsim)
+      continue;
 
     val_t const ub2 = min(
-      tmpmax[ja[jjp1 - 1]] * sum[jjp1 - 1], /* Awekar */
-      pfxmax[k] * tmpsum[ja[jjp1 - 1]]    /* ...    */
+      tmpmax[ja[jj]] * sum[jj], /* Awekar    */
+      max[jj] * tmpsum[ja[jj]]  /* ...       */
+      tmplen[ja[jj]] + len[jj]  /* Anastasiu */
     );
     if (s + ub2 < minsim)
       continue;
+#endif
 
     /* -----------------------------------------------------------------------*/
     /* Anastasiu dot product */
-    for (; jjp1 > ia[k]; jjp1--) {
+    for (ind_t jjp1 = ka[k]; jjp1 > ia[k]; jjp1--) {
       ind_t const jj = jjp1 - 1;
       if (tmpspa[ja[jj]] > 0.0) {
 #if 1
-        if (s + min(rowmax[i] * sum[jj], pfxmax[k] * tmpsum[ja[jj]]) < minsim) {
+        val_t const ub3 = min3(
+          tmpmax[ja[jj]] * sum[jj], /* Awekar    */
+          max[jj] * tmpsum[ja[jj]], /* ...       */
+          tmplen[ja[jj]] + len[jj]  /* Anastasiu */
+        );
+        if (s + ub3 < minsim) {
           s = 0.0;
           break;
         }
@@ -202,13 +217,6 @@ verify(
 
         /* update global counter */
         apss_nmacs2++;
-
-#if 1
-        if (s + tmprs3[ja[jj]] + rs3[jj] < minsim) {
-          s = 0.0;
-          break;
-        }
-#endif
       }
     }
 
@@ -222,15 +230,12 @@ verify(
     apss_nvdot++;
   }
 
-  BLAS_vsctrz(ia[i + 1] - ia[i], ja + ia[i], tmprs3);
   BLAS_vsctrz(ia[i + 1] - ia[i], ja + ia[i], tmpsum);
   BLAS_vsctrz(ia[i + 1] - ia[i], ja + ia[i], tmpmax);
+  BLAS_vsctrz(ia[i + 1] - ia[i], ja + ia[i], tmplen);
   BLAS_vsctrz(ia[i + 1] - ia[i], ja + ia[i], tmpspa);
 
   return ncnt;
-
-  (void)sum;
-  (void)tmpsum;
 }
 
 /*----------------------------------------------------------------------------*/
@@ -272,12 +277,10 @@ apss_nova(
   ind_t  const * const m_ka = pp->ka;
   ind_t  const * const m_ra = pp->ra;
   val_t  const * const m_rs1 = pp->m_rs1;
-  val_t  const * const m_rs3 = pp->m_rs3;
   val_t  const * const m_sum = pp->m_sum;
   val_t  const * const m_max = pp->m_max;
-  val_t  const * const i_rs3 = pp->i_rs3;
-  val_t  const * const rowmax = pp->rowmax;
-  val_t  const * const pfxmax = pp->pfxmax;
+  val_t  const * const m_len = pp->m_len;
+  val_t  const * const i_len = pp->i_len;
   val_t  const * const pscore = pp->pscore;
 
   /* unpack /I/ */
@@ -294,9 +297,9 @@ apss_nova(
 
   /* allocate scratch memory */
   ind_t       * const marker = GC_malloc(m_nr * sizeof(*marker));
-  val_t       * const tmprs3 = GC_calloc(m_nc, sizeof(*tmprs3));
   val_t       * const tmpsum = GC_calloc(m_nc, sizeof(*tmpsum));
   val_t       * const tmpmax = GC_calloc(m_nc, sizeof(*tmpmax));
+  val_t       * const tmplen = GC_calloc(m_nc, sizeof(*tmplen));
   val_t       * const tmpspa = GC_calloc(m_nc, sizeof(*tmpspa));
   struct cand * const tmpcnd = GC_malloc(m_nr * sizeof(*tmpcnd));
 
@@ -317,13 +320,12 @@ apss_nova(
   for (ind_t i = 0; i < m_nr; i++) {
     /* generate candidate vectors */
     ind_t const cnt = generate(minsim, i, m_ia, m_ja, m_ka, m_ra, m_a, m_rs1,
-                               m_rs3, m_sum, i_ia, i_ja, i_a, i_rs3, marker,
-                               tmpcnd);
+                               m_len, i_ia, i_ja, i_a, i_len, marker, tmpcnd);
 
     /* verify candidate vectors */
-    ind_t const ncnt = verify(minsim, cnt, i, m_ia, m_ja, m_ka, m_a, m_rs3,
-                              m_sum, m_max, rowmax, pfxmax, pscore, marker,
-                              tmprs3, tmpsum, tmpmax, tmpspa, tmpcnd);
+    ind_t const ncnt = verify(minsim, cnt, i, m_ia, m_ja, m_ka, m_a, m_sum,
+                              m_max, m_len, pscore, marker, tmpsum, tmpmax,
+                              tmplen, tmpspa, tmpcnd);
 
     /* update global counters */
     apss_ncand += cnt;
@@ -365,9 +367,9 @@ apss_nova(
 
   /* free scratch memory */
   GC_free(marker);
-  GC_free(tmprs3);
   GC_free(tmpsum);
   GC_free(tmpmax);
+  GC_free(tmplen);
   GC_free(tmpspa);
   GC_free(tmpcnd);
 

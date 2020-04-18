@@ -20,15 +20,16 @@ struct pp_payld
   Matrix I;
   ind_t *ka;
   ind_t *ra;
-  val_t *m_rs1;
-  val_t *m_rs3;
   val_t *m_sum;
   val_t *m_max;
-  val_t *i_rs3;
+  val_t *m_len;
   val_t *i_sum;
   val_t *i_max;
-  val_t *rowmax;
-  val_t *pfxmax;
+  val_t *i_len;
+
+  val_t *m_rs1;
+  val_t *m_rs3;
+  val_t *i_rs3;
   val_t *pscore;
 };
 
