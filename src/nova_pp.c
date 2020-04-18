@@ -32,9 +32,9 @@ filt_row(
 )
 {
   ind_t j;
-  val_t b1 = 0.0, bt = 0.0, b3 = 0.0;
+  val_t b1 = 0.0, bt = 0.0, b3 = 0.0, ub = 0.0;
 
-  for (j = 0; j < n && min(b1, b3) < minsim; j++) {
+  for (j = 0; j < n && ub < minsim; j++) {
     /* Bayardo bound */
     b1 += a[j] * min(mx, colmax[ja[j]]);
 
@@ -42,15 +42,23 @@ filt_row(
     bt += a[j] * a[j];
     b3  = sqrtv(bt);
 
+    ub = min(
+      b1, /* Bayardo   */
+      b3  /* Anastasiu */
+    );
+
     /* TODO: There is some potential here to use the Awekar bound to reduce the
-     * number of items indexed --- we will need to keep track of the sum up to
-     * the given point for this row and the maximum sum up to the given point
-     * for all rows after this one; we will also need to keep track of the
-     * maximum value up to the given point for this row and the maximum value up
-     * to the given point for all rows after this one (this is different than
-     * colmax).
+     * number of items indexed --- we will need to keep track of the maximum sum
+     * up to the given point for all rows after this one; we will also need to
+     * keep track of the maximum value up to the given point for all rows after
+     * this one (this is different than colmax).
      *
      * This will replace Bayardo bound */
+#if 0
+    rowmax[j] * colsum[ja[j]], /* Awekar    */
+    colmax[ja[j]] * rowsum[j], /* ...       */
+    rowlen[j] * collen[ja[j]]  /* Anastasiu */
+#endif
   }
 
   /* return prefix split */
@@ -99,16 +107,12 @@ junk_row(
   ind_t const n,
   ind_t const * const ja,
   val_t const * const a,
-  val_t const * const colmax,
-  val_t       * const rs1
+  val_t const * const colmax
 )
 {
   val_t b1 = 0.0, bt = 0.0, b3 = 0.0;
 
   for (ind_t j = 0; j < n; j++) {
-    /* compute pscores */
-    rs1[j] = b1;
-
     b1 += a[j] * min(mx, colmax[ja[j]]);
     bt += a[j] * a[j];
     b3  = sqrtv(bt);
@@ -164,7 +168,7 @@ rfilt(
 
     /* compute prefix maximums */
     Junk stat = junk_row(rowmax[i], ka[i] - ia[i], ja + ia[i], a + ia[i],
-                         colmax, rs1 + ia[i]);
+                         colmax);
     pscore[i] = stat.pscore;
 
     /* XXX: (improvement) update column maximums */
@@ -177,7 +181,7 @@ rfilt(
   memset(colmax, 0, nc * sizeof(*colmax));
 
   for (ind_t i = 0; i < nr; i++) {
-    val_t b1 = 0.0, bt = 1.0, b3 = 1.0;
+    val_t b1 = 0.0;
 
     /* precompute b1 */
     for (ind_t j = ia[i]; j < ia[i + 1]; j++)
@@ -187,11 +191,9 @@ rfilt(
     for (ind_t jp1 = ia[i + 1]; jp1 > ia[i]; jp1--) {
       ind_t const j = jp1 - 1;
 
-      b1 -= a[j] * colmax[ja[j]];
-      bt -= a[j] * a[j];
-      b3  = bt < 0.0 ? 0.0 : sqrtv(bt);
-
       rs1[j] = b1;
+
+      b1 -= a[j] * colmax[ja[j]];
     }
 
     /* update column maximums */
