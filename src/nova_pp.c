@@ -31,9 +31,19 @@ filter_row(
     /* Bayardo bound */
     b1 += a[j] * min(mx, colmax[ja[j]]);
 
-   /* Anastasiu bound */
+    /* Anastasiu bound */
     bt += a[j] * a[j];
     b3  = sqrtv(bt);
+
+    /* TODO: There is some potential here to use the Awekar bound to reduce the
+     * number of items indexed --- we will need to keep track of the sum up to
+     * the given point for this row and the maximum sum up to the given point
+     * for all rows after this one; we will also need to keep track of the
+     * maximum value up to the given point for this row and the maximum value up
+     * to the given point for all rows after this one (this is different than
+     * colmax).
+     *
+     * This will replace Bayardo bound */
   }
 
   /* return prefix split */
@@ -54,6 +64,8 @@ rfilt(
   ind_t       * const ka,
   val_t       * const rs1,
   val_t       * const rs3,
+  val_t       * const sum,
+  val_t       * const max,
   val_t       * const rowmax,
   val_t       * const pfxmax,
   val_t       * const pscore
@@ -81,6 +93,19 @@ rfilt(
     for (ind_t j = ia[i]; j < ia[i + 1]; j++)
       if (a[j] > colmax[ja[j]])
         colmax[ja[j]] = a[j];
+
+    /* compute prefix sums */
+    sum[ia[i]] = a[ia[i]];
+    for (ind_t j = ia[i] + 1; j < ia[i + 1]; j++)
+      sum[j] = sum[j - 1] + a[j];
+
+    /* compute prefix maximums */
+    max[ia[i]] = a[ia[i]];
+    for (ind_t j = ia[i] + 1; j < ia[i + 1]; j++)
+      max[j] = max(max[j - 1], a[j]);
+
+    /* XXX: Keeping column prefix max and sum across all columns could be a good
+     * use for a fenwick tree */
 
     /* compute prefix maximums */
     for (ind_t j = ia[i]; j < ka[i]; j++)
@@ -143,12 +168,16 @@ csrcsc(
   ind_t const nc,
   ind_t const * const restrict ia,
   ind_t const * const restrict ja,
-  val_t const * const restrict acsr,
   ind_t const * const restrict ka,
+  val_t const * const restrict acsr,
+  val_t const * const restrict sum,
+  val_t const * const restrict max,
   ind_t       * const restrict ia1,
   ind_t       * const restrict ja1,
   val_t       * const restrict acsc,
-  val_t       * const restrict rs31
+  val_t       * const restrict rs31,
+  val_t       * const restrict sum1,
+  val_t       * const restrict max1
 )
 {
   memset(ia1, 0, (nc + 1) * sizeof(*ia1));
@@ -168,9 +197,11 @@ csrcsc(
     for (ind_t j = ia[i]; j < ka[i]; j++)
       rst += acsr[j] * acsr[j];
     for (ind_t j = ka[i]; j < ia[i + 1]; j++) {
-      ja1[ia1[ja[j]]]  = i;
-      acsc[ia1[ja[j]]] = acsr[j];
-      rs31[ia1[ja[j]]++] = sqrtv(rst);
+      ja1[ia1[ja[j]]]    = i;
+      acsc[ia1[ja[j]]]   = acsr[j];
+      rs31[ia1[ja[j]]]   = sqrtv(rst);
+      sum1[ia1[ja[j]]]   = sum[j];
+      max1[ia1[ja[j]]++] = max[j];
       rst += acsr[j] * acsr[j];
     }
   }
@@ -187,8 +218,12 @@ static int
 fiidx(
   Matrix const * const M,
   ind_t  const * const m_ka,
+  val_t  const * const m_sum,
+  val_t  const * const m_max,
   Matrix       * const I,
-  val_t ** const i_rs3
+  val_t ** const i_rs3,
+  val_t ** const i_sum,
+  val_t ** const i_max
 )
 {
   /* ...garbage collected function... */
@@ -211,8 +246,11 @@ fiidx(
   ind_t * const i_ja  = GC_malloc(i_nnz * sizeof(*i_ja));
   val_t * const i_a   = GC_malloc(i_nnz * sizeof(*i_a));
                *i_rs3 = GC_malloc(i_nnz * sizeof(*i_rs3));
+               *i_sum = GC_malloc(i_nnz * sizeof(*i_sum));
+               *i_max = GC_malloc(i_nnz * sizeof(*i_max));
 
-  csrcsc(m_nr, m_nc, m_ia, m_ja, m_a, m_ka, i_ia, i_ja, i_a, *i_rs3);
+  csrcsc(m_nr, m_nc, m_ia, m_ja, m_ka, m_a, m_sum, m_max, i_ia, i_ja, i_a,
+         *i_rs3, *i_sum, *i_max);
 
   /* record relevant info in /I/ */
   I->nr  = m_nc;
@@ -293,7 +331,11 @@ pp_free(
   free(pp->ra);
   free(pp->m_rs1);
   free(pp->m_rs3);
+  free(pp->m_sum);
+  free(pp->m_max);
   free(pp->i_rs3);
+  free(pp->i_sum);
+  free(pp->i_max);
   free(pp->rowmax);
   free(pp->pfxmax);
   free(pp->pscore);
@@ -346,22 +388,26 @@ apss_nova_pp(
   ind_t * const m_ra  = GC_malloc(m_nnz * sizeof(*m_ra));
   val_t * const m_rs1 = GC_malloc(m_nnz * sizeof(*m_rs1));
   val_t * const m_rs3 = GC_malloc(m_nnz * sizeof(*m_rs3));
+  val_t * const m_sum = GC_calloc(m_nnz, sizeof(*m_sum));
+  val_t * const m_max = GC_calloc(m_nnz, sizeof(*m_max));
   val_t * const rowmax = GC_calloc(m_nr, sizeof(*rowmax));
   val_t * const pfxmax = GC_calloc(m_nr, sizeof(*pfxmax));
   val_t * const pscore = GC_calloc(m_nr, sizeof(*pscore));
   val_t * i_rs3;
+  val_t * i_sum;
+  val_t * i_max;
 
   /* init /I/ */
   err = Matrix_init(I);
   GC_assert(!err);
 
   /* precompute row prefixes and their statistics */
-  err = rfilt(minsim, m_nr, m_nc, m_ia, m_ja, m_a, m_ka, m_rs1, m_rs3, rowmax,
-              pfxmax, pscore);
+  err = rfilt(minsim, m_nr, m_nc, m_ia, m_ja, m_a, m_ka, m_rs1, m_rs3, m_sum,
+              m_max, rowmax, pfxmax, pscore);
   GC_assert(!err);
 
   /* precompute dynamic inverted index */
-  err = fiidx(M, m_ka, I, &i_rs3);
+  err = fiidx(M, m_ka, m_sum, m_max, I, &i_rs3, &i_sum, &i_max);
   GC_assert(!err);
 
   /* precompute dynamic inverted index */
@@ -373,7 +419,11 @@ apss_nova_pp(
   pp->ra    = m_ra;
   pp->m_rs1 = m_rs1;
   pp->m_rs3 = m_rs3;
+  pp->m_sum = m_sum;
+  pp->m_max = m_max;
   pp->i_rs3 = i_rs3;
+  pp->i_sum = i_sum;
+  pp->i_max = i_max;
   pp->rowmax = rowmax;
   pp->pfxmax = pfxmax;
   pp->pscore = pscore;
