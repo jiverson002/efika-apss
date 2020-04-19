@@ -41,15 +41,17 @@ filt_row(
   val_t const * const collen_
 )
 {
-  ind_t j;
-  val_t clen;
-
   rowmax[0] = a[0];        /* Awekar    */
   rowsum[0] = a[0];        /* ...       */
   rowsqr[0] = a[0] * a[0]; /* Anastasiu */
   rowlen[0] = a[0];        /* ...       */
 
-  BIT_sum(XXX, collen_, ja[0], max, clen);
+  /* XXX: Due to rounding error, this could actually be slightly above 1.0.
+   *      This could easily be corrected with:
+   *
+   *      clen = clen <= 1.0 ? clen : 1.0;
+   */
+  val_t clen = BIT_sum(ja[0], collen_, BIT_op_max);
 
   /* Bayardo bound */
   val_t b1 = a[0] * colmax[ja[0]];
@@ -60,15 +62,14 @@ filt_row(
     rowlen[0] * clen         /* Anastasiu */
   );
 
+  ind_t j;
   for (j = 1; j < n && ub < minsim; j++) {
-    /* prefix scans */
-    rowmax[j] = max(rowmax[j - 1], a[j]);
-    rowsum[j] = sum(rowsum[j - 1], a[j]);
-    rowsqr[j] = sum(rowsqr[j - 1], a[j] * a[j]);
+    rowmax[j] = BIT_op_max(rowmax[j - 1], a[j]);
+    rowsum[j] = BIT_op_sum(rowsum[j - 1], a[j]);
+    rowsqr[j] = BIT_op_sum(rowsqr[j - 1], a[j] * a[j]);
     rowlen[j] = sqrtv(rowsqr[j]);
 
-    BIT_sum(XXX, collen_, ja[j], max, clen);
-    clen = clen <= 1.0 ? clen : 1.0;
+    clen = BIT_sum(ja[j], collen_, BIT_op_max);
 
     b1 += a[j] * colmax[ja[j]];
 
@@ -79,17 +80,15 @@ filt_row(
   }
 
   for (ind_t jj = j; jj < n; jj++) {
-    /* prefix scans */
-    rowmax[jj] = max(rowmax[jj - 1], a[jj]);
-    rowsum[jj] = sum(rowsum[jj - 1], a[jj]);
-    rowsqr[jj] = sum(rowsqr[jj - 1], a[jj] * a[jj]);
+    rowmax[jj] = BIT_op_max(rowmax[jj - 1], a[jj]);
+    rowsum[jj] = BIT_op_sum(rowsum[jj - 1], a[jj]);
+    rowsqr[jj] = BIT_op_sum(rowsqr[jj - 1], a[jj] * a[jj]);
     rowlen[jj] = sqrtv(rowsqr[jj]);
   }
 
   /* return prefix split */
   return j - 1;
 
-  (void)colmax;
   (void)colmax_;
   (void)colsum_;
   (void)colsqr_;
@@ -114,10 +113,10 @@ stat_row(
 )
 {
   for (ind_t j = 0; j < n; j++) {
-    BIT_add(nc, colmax, ja[j], rowmax[j], max);
-    BIT_add(nc, colsum, ja[j], rowsum[j], max);
-    BIT_add(nc, colsqr, ja[j], rowsqr[j], max);
-    BIT_add(nc, collen, ja[j], rowlen[j], max);
+    BIT_add(rowmax[j], nc, ja[j], colmax, BIT_op_max);
+    BIT_add(rowsum[j], nc, ja[j], colsum, BIT_op_max);
+    BIT_add(rowsqr[j], nc, ja[j], colsqr, BIT_op_max);
+    BIT_add(rowlen[j], nc, ja[j], collen, BIT_op_max);
   }
 }
 
@@ -134,14 +133,13 @@ junk_row(
   val_t const * const collen_
 )
 {
-  val_t clen;
   val_t b1 = 0.0;
 
   for (ind_t j = 0; j < n; j++)
     b1 += a[j] * colmax[ja[j]];
 
-  BIT_sum(XXX, collen_, ja[n - 1], max, clen);
-  val_t const b3 = rowlen[n - 1] * clen;
+  val_t const clen = BIT_sum(ja[n - 1], collen_, BIT_op_max);
+  val_t const b3   = rowlen[n - 1] * clen;
 
   return (Junk){ min(b1, b3) };
 }
