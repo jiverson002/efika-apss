@@ -51,8 +51,6 @@ filt_row(
 
   BIT_sum(XXX, collen_, ja[0], max, clen);
 
-  clen = clen <= 1.0 ? clen : 1.0;
-
   /* Bayardo bound */
   val_t b1 = a[0] * colmax[ja[0]];
 
@@ -70,7 +68,6 @@ filt_row(
     rowlen[j] = sqrtv(rowsqr[j]);
 
     BIT_sum(XXX, collen_, ja[j], max, clen);
-
     clen = clen <= 1.0 ? clen : 1.0;
 
     b1 += a[j] * colmax[ja[j]];
@@ -129,20 +126,22 @@ stat_row(
 /*----------------------------------------------------------------------------*/
 static inline Junk
 junk_row(
-  val_t const mx,
   ind_t const n,
   ind_t const * const ja,
   val_t const * const a,
-  val_t const * const colmax
+  val_t const * const colmax,
+  val_t const * const rowlen,
+  val_t const * const collen_
 )
 {
-  val_t b1 = 0.0, bt = 0.0, b3 = 0.0;
+  val_t clen;
+  val_t b1 = 0.0;
 
-  for (ind_t j = 0; j < n; j++) {
-    b1 += a[j] * min(mx, colmax[ja[j]]);
-    bt += a[j] * a[j];
-    b3  = sqrtv(bt);
-  }
+  for (ind_t j = 0; j < n; j++)
+    b1 += a[j] * colmax[ja[j]];
+
+  BIT_sum(XXX, collen_, ja[n - 1], max, clen);
+  val_t const b3 = rowlen[n - 1] * clen;
 
   return (Junk){ min(b1, b3) };
 }
@@ -164,7 +163,6 @@ rfilt(
   val_t       * const sum,
   val_t       * const sqr,
   val_t       * const len,
-  val_t       * const rowmax,
   val_t       * const pscore
 )
 {
@@ -172,7 +170,7 @@ rfilt(
   GC_func_init();
 
   /* allocate scratch memory */
-  val_t * const colmax = GC_calloc(nc, sizeof(*colmax));
+  val_t * const colmax  = GC_calloc(nc, sizeof(*colmax));
   val_t * const colmax_ = GC_calloc((nc + 1), sizeof(*colmax_));
   val_t * const colsum_ = GC_calloc((nc + 1), sizeof(*colsum_));
   val_t * const colsqr_ = GC_calloc((nc + 1), sizeof(*colsqr_));
@@ -181,26 +179,21 @@ rfilt(
   for (ind_t ip1 = nr; ip1 > 0; ip1--) {
     ind_t i = ip1 - 1;
 
-    /* compute row maximums */
-    for (ind_t j = ia[i]; j < ia[i + 1]; j++)
-      if (a[j] > rowmax[i])
-        rowmax[i] = a[j];
-
     /* find prefix split for each row_i */
     ka[i] = ia[i] + filt_row(minsim, ia[i + 1] - ia[i], ja + ia[i], a + ia[i],
                              max + ia[i], sum + ia[i], sqr + ia[i], len + ia[i],
                              colmax, colmax_, colsum_, colsqr_, collen_);
+
+    /* compute prefix maximums */
+    Junk stat = junk_row(ka[i] - ia[i], ja + ia[i], a + ia[i], colmax,
+                         len + ia[i], collen_);
+    pscore[i] = stat.pscore;
 
     /* compute prefix stats for each row_i */
     stat_row(nc, ia[i + 1] - ia[i], ja + ia[i], max + ia[i], sum + ia[i],
              sqr + ia[i], len + ia[i], colmax_, colsum_, colsqr_, collen_);
 
     /* -----------------------------------------------------------------------*/
-
-    /* compute prefix maximums */
-    Junk stat = junk_row(rowmax[i], ka[i] - ia[i], ja + ia[i], a + ia[i],
-                         colmax);
-    pscore[i] = stat.pscore;
 
     /* XXX: (improvement) update column maximums */
     for (ind_t j = ia[i]; j < ia[i + 1]; j++)
@@ -359,8 +352,8 @@ diidx(
   val_t  const         minsim,
   Matrix const * const M,
   ind_t        * const m_ra,
-  Matrix const * const I,
-  val_t  const * const rowmax
+  val_t  const * const m_max,
+  Matrix const * const I
 )
 {
   /* ...garbage collected function... */
@@ -384,14 +377,14 @@ diidx(
 
   /* remove rows from index that are too short */
   for (ind_t i = 0; i < m_nr; i++) {
-    val_t const sz1 = minsim / rowmax[i];
+    val_t const sz1 = minsim / m_max[m_ia[i + 1] - 1];
 
     for (ind_t j = m_ia[i]; j < m_ia[i + 1]; j++) {
       ind_t const jj = m_ja[j];
 
       for (; i_ra[jj] < i_ia[jj + 1]; i_ra[jj]++) {
         ind_t const k = i_ja[i_ra[jj]];
-        if ((m_ia[k + 1] - m_ia[k]) * rowmax[k] >= sz1)
+        if ((m_ia[k + 1] - m_ia[k]) * m_max[m_ia[k + 1] - 1] >= sz1)
           break;
       }
 
@@ -488,16 +481,13 @@ apss_nova_pp(
   val_t * i_sqr;
   val_t * i_len;
 
-  /* allocate scratch memory */
-  val_t * const rowmax = GC_calloc(m_nr, sizeof(*rowmax));
-
   /* init /I/ */
   err = Matrix_init(I);
   GC_assert(!err);
 
   /* precompute row prefixes and their statistics */
   err = rfilt(minsim, m_nr, m_nc, m_ia, m_ja, m_a, m_ka, m_rs1, m_max, m_sum,
-              m_sqr, m_len, rowmax, pscore);
+              m_sqr, m_len, pscore);
   GC_assert(!err);
 
   /* precompute dynamic inverted index */
@@ -506,7 +496,7 @@ apss_nova_pp(
   GC_assert(!err);
 
   /* precompute dynamic inverted index */
-  err = diidx(minsim, M, m_ra, I, rowmax);
+  err = diidx(minsim, M, m_ra, m_max, I);
   GC_assert(!err);
 
   /* record info in /pp/ */
@@ -527,9 +517,6 @@ apss_nova_pp(
   /* record payload in /M/ */
   M->pp = pp;
   M->pp_free = &pp_free;
-
-  /* free scratch memory */
-  GC_free(rowmax);
 
   return 0;
 }

@@ -156,8 +156,6 @@ verify(
 )
 {
   ind_t ncnt = 0;
-  ind_t const ln = ia[i + 1] - ia[i];
-  val_t const mx = max[ia[i + 1] - 1];
 
   BLAS_vsctr(ia[i + 1] - ia[i],   a + ia[i], ja + ia[i], tmpspa);
   BLAS_vsctr(ia[i + 1] - ia[i], max + ia[i], ja + ia[i], tmpmax);
@@ -181,32 +179,14 @@ verify(
     }
 
     /* -----------------------------------------------------------------------*/
-    val_t const ub1 = min(
-      min(ln, ka[k] - ia[k]) * mx * max[ka[k] - 1], /* Bayardo */
-      pscore[k]                                     /* pscore  */
+    val_t const ub1 = min3(
+      /*min(ia[i+1]-ia[i], ka[k]-ia[k])*mx*max[ka[k]-1],*/ /* Bayardo   */
+      max[ia[i + 1] - 1] * sum[ka[k] - 1],                 /* Awekar    */
+      max[ka[k] - 1] * sum[ia[i + 1] - 1],                 /* ...       */
+      pscore[k]                                            /* Anastasiu */
     );
     if (s + ub1 < minsim)
       continue;
-
-#if 0
-    /* -----------------------------------------------------------------------*/
-    /* fast-forward to next matching column */
-    ind_t jjp1;
-    for (jjp1 = ka[k]; jjp1 > ia[k] && tmpspa[ja[jjp1 - 1]] == 0.0; jjp1--);
-    ind_t const jj = jjp1 - 1;
-
-    /* no more matching columns */
-    if (jjp1 == ia[k] && s < minsim)
-      continue;
-
-    val_t const ub2 = min(
-      tmpmax[ja[jj]] * sum[jj], /* Awekar    */
-      max[jj] * tmpsum[ja[jj]]  /* ...       */
-      tmplen[ja[jj]] + len[jj]  /* Anastasiu */
-    );
-    if (s + ub2 < minsim)
-      continue;
-#endif
 
     /* -----------------------------------------------------------------------*/
     /* Anastasiu dot product */
