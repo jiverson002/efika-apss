@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: MIT */
+#include <assert.h>
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "efika/apss.h"
@@ -25,50 +27,75 @@ typedef struct {
 static inline ind_t
 filt_row(
   val_t const minsim,
-  val_t const mx,
   ind_t const n,
   ind_t const * const ja,
   val_t const * const a,
-  val_t const * const colmax
+  val_t       * const rowmax,
+  val_t       * const rowsum,
+  val_t       * const rowsqr,
+  val_t       * const rowlen,
+  val_t const * const colmax,
+  val_t const * const colmax_,
+  val_t const * const colsum_,
+  val_t const * const colsqr_,
+  val_t const * const collen_
 )
 {
   ind_t j;
-  val_t b1 = 0.0, bt = 0.0, b3 = 0.0, ub = 0.0;
+  val_t clen;
 
-  for (j = 0; j < n && ub < minsim; j++) {
-    /* Bayardo bound */
-    b1 += a[j] * min(mx, colmax[ja[j]]);
+  rowmax[0] = a[0];        /* Awekar    */
+  rowsum[0] = a[0];        /* ...       */
+  rowsqr[0] = a[0] * a[0]; /* Anastasiu */
+  rowlen[0] = a[0];        /* ...       */
 
-    /* Anastasiu bound */
-    bt += a[j] * a[j];
-    b3  = sqrtv(bt);
+  BIT_sum(XXX, collen_, ja[0], max, clen);
+
+  clen = clen <= 1.0 ? clen : 1.0;
+
+  /* Bayardo bound */
+  val_t b1 = a[0] * colmax[ja[0]];
+
+  /* dot-product upper-bound */
+  val_t ub = min(
+    b1,                      /* Bayardo  */
+    rowlen[0] * clen         /* Anastasiu */
+  );
+
+  for (j = 1; j < n && ub < minsim; j++) {
+    /* prefix scans */
+    rowmax[j] = max(rowmax[j - 1], a[j]);
+    rowsum[j] = sum(rowsum[j - 1], a[j]);
+    rowsqr[j] = sum(rowsqr[j - 1], a[j] * a[j]);
+    rowlen[j] = sqrtv(rowsqr[j]);
+
+    BIT_sum(XXX, collen_, ja[j], max, clen);
+
+    clen = clen <= 1.0 ? clen : 1.0;
+
+    b1 += a[j] * colmax[ja[j]];
 
     ub = min(
-      b1, /* Bayardo   */
-      b3  /* Anastasiu */
+      b1,                      /* Bayardo   */
+      rowlen[j] * clen         /* Anastasiu */
     );
+  }
 
-    /* TODO: There is some potential here to use the Awekar bound to reduce the
-     * number of items indexed --- we will need to keep track of the maximum sum
-     * up to the given point for all rows after this one; we will also need to
-     * keep track of the maximum value up to the given point for all rows after
-     * this one (this is different than colmax).
-     *
-     * This will replace Bayardo bound */
-#if 0
-    BIT_sum(nc, colmax, ja[j], max, val_t const cmax);
-    BIT_sum(nc, colsum, ja[j], sum, val_t const csum);
-
-    ub = min(
-      rowmax[j] * csum, /* Awekar    */
-      cmax * rowsum[j], /* ...       */
-      rowlen[j] * clen  /* Anastasiu */
-    );
-#endif
+  for (ind_t jj = j; jj < n; jj++) {
+    /* prefix scans */
+    rowmax[jj] = max(rowmax[jj - 1], a[jj]);
+    rowsum[jj] = sum(rowsum[jj - 1], a[jj]);
+    rowsqr[jj] = sum(rowsqr[jj - 1], a[jj] * a[jj]);
+    rowlen[jj] = sqrtv(rowsqr[jj]);
   }
 
   /* return prefix split */
   return j - 1;
+
+  (void)colmax;
+  (void)colmax_;
+  (void)colsum_;
+  (void)colsqr_;
 }
 
 /*----------------------------------------------------------------------------*/
@@ -79,43 +106,21 @@ stat_row(
   ind_t const nc,
   ind_t const n,
   ind_t const * const ja,
-  val_t const * const a,
-  val_t       * const max,
-  val_t       * const sum,
-  val_t       * const sqr,
-  val_t       * const len,
+  val_t const * const rowmax,
+  val_t const * const rowsum,
+  val_t const * const rowsqr,
+  val_t const * const rowlen,
   val_t       * const colmax,
   val_t       * const colsum,
-  val_t       * const colsqr
+  val_t       * const colsqr,
+  val_t       * const collen
 )
 {
-  max[0] = a[0];
-  sum[0] = a[0];
-  sqr[0] = a[0] * a[0];
-  len[0] = a[0];
-
-  BIT_add(nc, colmax, ja[0], max[0], max);
-  BIT_add(nc, colsum, ja[0], sum[0], sum);
-  BIT_add(nc, colsqr, ja[0], sqr[0], sum);
-
-  for (ind_t j = 1; j < n; j++) {
-    /* prefix maximums */
-    max[j] = max(max[j - 1], a[j]);
-
-    /* prefix sums */
-    sum[j] = sum[j - 1] + a[j];
-
-    /* prefix lengths */
-    sqr[j] = sqr[j - 1] + a[j] * a[j];
-
-    /* XXX: Keeping column prefix max and sum across all columns could be a good
-     *      use for a fenwick tree. */
-    BIT_add(nc, colmax, ja[j], max[j], max);
-    BIT_add(nc, colsum, ja[j], sum[j], sum);
-    BIT_add(nc, colsqr, ja[j], sqr[j], sum);
-
-    /* ... */
-    len[j]  = sqrtv(sqr[j]);
+  for (ind_t j = 0; j < n; j++) {
+    BIT_add(nc, colmax, ja[j], rowmax[j], max);
+    BIT_add(nc, colsum, ja[j], rowsum[j], max);
+    BIT_add(nc, colsqr, ja[j], rowsqr[j], max);
+    BIT_add(nc, collen, ja[j], rowlen[j], max);
   }
 }
 
@@ -171,6 +176,7 @@ rfilt(
   val_t * const colmax_ = GC_calloc((nc + 1), sizeof(*colmax_));
   val_t * const colsum_ = GC_calloc((nc + 1), sizeof(*colsum_));
   val_t * const colsqr_ = GC_calloc((nc + 1), sizeof(*colsqr_));
+  val_t * const collen_ = GC_calloc((nc + 1), sizeof(*collen_));
 
   for (ind_t ip1 = nr; ip1 > 0; ip1--) {
     ind_t i = ip1 - 1;
@@ -181,12 +187,15 @@ rfilt(
         rowmax[i] = a[j];
 
     /* find prefix split for each row_i */
-    ka[i] = ia[i] + filt_row(minsim, rowmax[i], ia[i + 1] - ia[i], ja + ia[i],
-                             a + ia[i], colmax);
+    ka[i] = ia[i] + filt_row(minsim, ia[i + 1] - ia[i], ja + ia[i], a + ia[i],
+                             max + ia[i], sum + ia[i], sqr + ia[i], len + ia[i],
+                             colmax, colmax_, colsum_, colsqr_, collen_);
 
     /* compute prefix stats for each row_i */
-    stat_row(nc, ia[i + 1] - ia[i], ja + ia[i], a + ia[i], max + ia[i],
-             sum + ia[i], sqr + ia[i], len + ia[i], colmax_, colsum_, colsqr_);
+    stat_row(nc, ia[i + 1] - ia[i], ja + ia[i], max + ia[i], sum + ia[i],
+             sqr + ia[i], len + ia[i], colmax_, colsum_, colsqr_, collen_);
+
+    /* -----------------------------------------------------------------------*/
 
     /* compute prefix maximums */
     Junk stat = junk_row(rowmax[i], ka[i] - ia[i], ja + ia[i], a + ia[i],
@@ -229,6 +238,7 @@ rfilt(
   GC_free(colmax_);
   GC_free(colsum_);
   GC_free(colsqr_);
+  GC_free(collen_);
 
   return 0;
 }

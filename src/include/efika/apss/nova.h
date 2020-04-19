@@ -9,11 +9,12 @@
 /*----------------------------------------------------------------------------*/
 /* ... */
 /*----------------------------------------------------------------------------*/
-#define min(a, b)     ((a) < (b) ? (a) : (b))
-#define min3(a, b, c) min(min(a, b), c)
-#define max(a, b)     ((a) > (b) ? (a) : (b))
-#define max3(a, b, c) max(max(a, b), c)
-#define sum(a, b)     ((a) + (b))
+#define min(a, b)        ((a) < (b) ? (a) : (b))
+#define min3(a, b, c)    min(min(a, b), c)
+#define min4(a, b, c, d) min(min(a, b), min(c, d))
+#define max(a, b)        ((a) > (b) ? (a) : (b))
+#define max3(a, b, c)    max(max(a, b), c)
+#define sum(a, b)        ((a) + (b))
 
 /*----------------------------------------------------------------------------*/
 /*! Preprocessed data storage. */
