@@ -82,29 +82,28 @@ generate(
       val_t ub1;
       ind_t const k = i_ja[kk];
       val_t const w = i_a[kk];
-      ind_t const m = marker[k];
+      ind_t       m = marker[k];
 
       /* ignore candidates that come after i */
       if (k >= i)
         break;
 
       switch (m) {
-        case UNKNOWN:
-        if (allow_unknown) {
-          /* initialize solution matrix entry */
-          tmpcnd[cnt].ind = k;
-          tmpcnd[cnt].sim = v * w;
-
-          /* populate marker */
-          marker[k] = cnt++;
-
-          /* update global counter */
-          apss_nmacs1++;
-        }
-        break;
-
         case PRUNED:
         break;
+
+        case UNKNOWN:
+        if (!allow_unknown)
+          break;
+
+        /* initialize solution matrix entry */
+        tmpcnd[cnt].ind = k;
+        tmpcnd[cnt].sim = 0.0;
+
+        /* populate marker and updated m */
+        m = marker[k] = cnt++;
+
+        /* fall-through */
 
         default:
         ub1 = min3(

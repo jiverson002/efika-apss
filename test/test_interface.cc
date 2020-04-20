@@ -95,8 +95,8 @@ int main(int argc, char *argv[]) {
   ::testing::InitGoogleTest(&argc, argv);
 
   //REGISTER_TEST_SET(allpairs);
-  //REGISTER_TEST_SET(l2ap);
-  //REGISTER_TEST_SET(mmjoin);
+  REGISTER_TEST_SET(l2ap);
+  REGISTER_TEST_SET(mmjoin);
   REGISTER_TEST_SET(nova);
 
   return RUN_ALL_TESTS();

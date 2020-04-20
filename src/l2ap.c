@@ -88,7 +88,7 @@ generate(
       ind_t const k  = ja1[kk];
       val_t const w  = a1[kk];
       val_t const ly = l1[kk];
-      ind_t const m  = marker[k];
+      ind_t       m  = marker[k];
 
       /* ignore candidates that come after i */
       if (k >= i)
@@ -99,29 +99,28 @@ generate(
         break;
 
         case UNKNOWN:
-        if (allow_unknown) {
-          /* initialize solution matrix entry */
-          tmpcnd[cnt].ind = k;
-          tmpcnd[cnt].sim = v * w;
+        if (!allow_unknown)
+          break;
 
-          /* populate marker */
-          marker[k] = cnt++;
+        /* initialize solution matrix entry */
+        tmpcnd[cnt].ind = k;
+        tmpcnd[cnt].sim = 0.0;
 
-          /* update global counter */
-          apss_nmacs1++;
-        }
-        break;
+        /* populate marker */
+        m = marker[k] = cnt++;
+
+        /* fall-through */
 
         default:
         /* update partial dot product for candidate row */
         tmpcnd[m].sim += v * w;
 
+        /* update global counter */
+        apss_nmacs1++;
+
         /* Anastasiu pruning */
         if (tmpcnd[m].sim + rs3 * ly < minsim)
           marker[k] = PRUNED;
-
-        /* update global counter */
-        apss_nmacs1++;
       }
     }
   }
