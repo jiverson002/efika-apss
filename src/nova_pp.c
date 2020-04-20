@@ -15,16 +15,17 @@
 #include "efika/core/pp.h"
 
 /*----------------------------------------------------------------------------*/
-/* Junk row statistics. */
+/* Row prefix statistics. */
 /*----------------------------------------------------------------------------*/
 typedef struct {
+  ind_t n;
   val_t pscore;
-} Junk;
+} Stat;
 
 /*----------------------------------------------------------------------------*/
 /* Precompute prefix for a single row. */
 /*----------------------------------------------------------------------------*/
-static inline ind_t
+static inline Stat
 filt_row(
   val_t const minsim,
   ind_t const n,
@@ -62,12 +63,16 @@ filt_row(
     rowlen[0] * clen         /* Anastasiu */
   );
 
-  ind_t j;
-  for (j = 1; j < n && ub < minsim; j++) {
+  ind_t j = 1;
+  val_t pscore = 0.0;
+  for (; j < n && ub < minsim; j++) {
     rowmax[j] = BIT_op_max(rowmax[j - 1], a[j]);
     rowsum[j] = BIT_op_sum(rowsum[j - 1], a[j]);
     rowsqr[j] = BIT_op_sum(rowsqr[j - 1], a[j] * a[j]);
     rowlen[j] = sqrtv(rowsqr[j]);
+
+    /* record pscore before updating ub */
+    pscore = ub;
 
     clen = BIT_sum(ja[j], collen_, BIT_op_max);
 
@@ -87,7 +92,7 @@ filt_row(
   }
 
   /* return prefix split */
-  return j - 1;
+  return (Stat){ j - 1, pscore };
 
   (void)colmax_;
   (void)colsum_;
@@ -118,30 +123,6 @@ stat_row(
     BIT_add(rowsqr[j], nc, ja[j], colsqr, BIT_op_max);
     BIT_add(rowlen[j], nc, ja[j], collen, BIT_op_max);
   }
-}
-
-/*----------------------------------------------------------------------------*/
-/* Precompute junk prefix statistics for a single row. */
-/*----------------------------------------------------------------------------*/
-static inline Junk
-junk_row(
-  ind_t const n,
-  ind_t const * const ja,
-  val_t const * const a,
-  val_t const * const colmax,
-  val_t const * const rowlen,
-  val_t const * const collen_
-)
-{
-  val_t b1 = 0.0;
-
-  for (ind_t j = 0; j < n; j++)
-    b1 += a[j] * colmax[ja[j]];
-
-  val_t const clen = BIT_sum(ja[n - 1], collen_, BIT_op_max);
-  val_t const b3   = rowlen[n - 1] * clen;
-
-  return (Junk){ min(b1, b3) };
 }
 
 /*----------------------------------------------------------------------------*/
@@ -177,23 +158,19 @@ rfilt(
   for (ind_t ip1 = nr; ip1 > 0; ip1--) {
     ind_t i = ip1 - 1;
 
-    /* find prefix split for each row_i */
-    ka[i] = ia[i] + filt_row(minsim, ia[i + 1] - ia[i], ja + ia[i], a + ia[i],
-                             max + ia[i], sum + ia[i], sqr + ia[i], len + ia[i],
-                             colmax, colmax_, colsum_, colsqr_, collen_);
+    /* find prefix split and pscore for each row_i */
+    Stat const pfx = filt_row(minsim, ia[i + 1] - ia[i], ja + ia[i], a + ia[i],
+                              max + ia[i], sum + ia[i], sqr + ia[i], len +
+                              ia[i], colmax, colmax_, colsum_, colsqr_,
+                              collen_);
+    ka[i] = ia[i] + pfx.n;
+    pscore[i] = pfx.pscore;
 
-    /* compute prefix maximums */
-    Junk stat = junk_row(ka[i] - ia[i], ja + ia[i], a + ia[i], colmax,
-                         len + ia[i], collen_);
-    pscore[i] = stat.pscore;
-
-    /* compute prefix stats for each row_i */
+    /* update global stats for each row_i */
     stat_row(nc, ia[i + 1] - ia[i], ja + ia[i], max + ia[i], sum + ia[i],
              sqr + ia[i], len + ia[i], colmax_, colsum_, colsqr_, collen_);
 
-    /* -----------------------------------------------------------------------*/
-
-    /* XXX: (improvement) update column maximums */
+    /* update column maximums */
     for (ind_t j = ia[i]; j < ia[i + 1]; j++)
       if (a[j] > colmax[ja[j]])
         colmax[ja[j]] = a[j];
@@ -203,20 +180,13 @@ rfilt(
   memset(colmax, 0, nc * sizeof(*colmax));
 
   for (ind_t i = 0; i < nr; i++) {
-    val_t b1 = 0.0;
-
-    /* precompute b1 */
+    /* compute final remscore */
     for (ind_t j = ia[i]; j < ia[i + 1]; j++)
-      b1 += a[j] * colmax[ja[j]];
+      rs1[ia[i + 1] - 1] += a[j] * colmax[ja[j]];
 
     /* compute remscores */
-    for (ind_t jp1 = ia[i + 1]; jp1 > ia[i]; jp1--) {
-      ind_t const j = jp1 - 1;
-
-      rs1[j] = b1;
-
-      b1 -= a[j] * colmax[ja[j]];
-    }
+    for (ind_t jp1 = ia[i + 1] - 1; jp1 > ia[i]; jp1--)
+      rs1[jp1 - 1] = rs1[jp1] - a[jp1] * colmax[ja[jp1]];
 
     /* update column maximums */
     for (ind_t j = ia[i]; j < ia[i + 1]; j++)
@@ -468,7 +438,7 @@ apss_nova_pp(
   /* allocate memory for other preprocessed data */
   ind_t * const m_ka  = GC_malloc(m_nr * sizeof(*m_ka));
   ind_t * const m_ra  = GC_malloc(m_nnz * sizeof(*m_ra));
-  val_t * const m_rs1 = GC_malloc(m_nnz * sizeof(*m_rs1));
+  val_t * const m_rs1 = GC_calloc(m_nnz, sizeof(*m_rs1));
   val_t * const m_max = GC_calloc(m_nnz, sizeof(*m_max));
   val_t * const m_sum = GC_calloc(m_nnz, sizeof(*m_sum));
   val_t * const m_sqr = GC_calloc(m_nnz, sizeof(*m_sqr));
