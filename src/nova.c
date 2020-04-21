@@ -5,6 +5,7 @@
 
 #include "efika/apss.h"
 
+#include "efika/apss/bit.h"
 #include "efika/apss/nova.h"
 #include "efika/apss/export.h"
 #include "efika/apss/rename.h"
@@ -39,16 +40,19 @@ generate(
   ind_t const                  i,
   ind_t const * const restrict m_ia,
   ind_t const * const restrict m_ja,
-  ind_t const * const restrict m_ka,
   ind_t const * const restrict m_ra,
   val_t const * const restrict m_a,
   val_t const * const restrict m_rs1,
   val_t const * const restrict m_max,
   val_t const * const restrict m_sum,
   val_t const * const restrict m_len,
+  val_t const * const restrict m_cmx,
+  val_t const * const restrict m_csm,
+  val_t const * const restrict m_cln,
   ind_t const * const restrict i_ia,
   ind_t const * const restrict i_ja,
   val_t const * const restrict i_a,
+  val_t const * const restrict i_rs1,
   val_t const * const restrict i_max,
   val_t const * const restrict i_sum,
   val_t const * const restrict i_len,
@@ -69,12 +73,16 @@ generate(
     val_t const max = m_max[jj - 1];
     val_t const sum = m_sum[jj - 1];
     val_t const len = m_len[jj - 1];
+    val_t const cmx = m_cmx[jj - 1];
+    val_t const csm = m_csm[jj - 1];
+    val_t const cln = m_cln[jj - 1];
 
     /* determine if any new candidates should be allowed */
-    bool const allow_unknown  = minsim <= min(
-      rs1, /* Bayardo   */
-           /* TODO: Awekar */
-      len  /* Anastasiu */
+    bool const allow_unknown  = minsim <= min4(
+      rs1,       /* Bayardo   */
+      max * csm, /* Awekar    */
+      cmx * sum, /* ...       */
+      len * cln  /* Anastasiu */
     );
 
     /* iterate through the rows, k,  that have indexed column j */
@@ -106,6 +114,10 @@ generate(
         /* fall-through */
 
         default:
+        // TODO: i_rs1[kk],       /* Bayardo   */
+        //       i_rs1 is not just the transpose of rs1, since rs1 was computed
+        //       with colmax values for successor rows, while i_rs1 should be
+        //       computed with colmax values for the predecessor rows.
         ub1 = min3(
           max * i_sum[kk], /* Awekar    */
           i_max[kk] * sum, /* ...       */
@@ -127,7 +139,7 @@ generate(
 
   return cnt;
 
-  (void)m_ka;
+  (void)i_rs1;
 }
 
 /*----------------------------------------------------------------------------*/
@@ -142,6 +154,7 @@ verify(
   ind_t const * const restrict ja,
   ind_t const * const restrict ka,
   val_t const * const restrict a,
+  val_t const * const restrict rs1,
   val_t const * const restrict max,
   val_t const * const restrict sum,
   val_t const * const restrict len,
@@ -179,10 +192,10 @@ verify(
 
     /* -----------------------------------------------------------------------*/
     val_t const ub1 = min3(
-      /*min(ia[i+1]-ia[i], ka[k]-ia[k])*mx*max[ka[k]-1],*/ /* Bayardo   */
-      max[ia[i + 1] - 1] * sum[ka[k] - 1],                 /* Awekar    */
-      max[ka[k] - 1] * sum[ia[i + 1] - 1],                 /* ...       */
-      pscore[k]                                            /* Anastasiu */
+      /* rs1[ka[k - 1]], (See not in generate) */ /* Bayardo   */
+      max[ia[i + 1] - 1] * sum[ka[k] - 1],        /* Awekar    */
+      max[ka[k] - 1] * sum[ia[i + 1] - 1],        /* ...       */
+      pscore[k]                                   /* Anastasiu */
     );
     if (s + ub1 < minsim)
       continue;
@@ -194,9 +207,10 @@ verify(
       if (tmpspa[ja[jj]] > 0.0) {
 #if 1
         val_t const ub3 = min3(
-          tmpmax[ja[jj]] * sum[jj], /* Awekar    */
-          max[jj] * tmpsum[ja[jj]], /* ...       */
-          tmplen[ja[jj]] + len[jj]  /* Anastasiu */
+          /* rs1[jj], (See not in generate) */ /* Bayardo   */
+          tmpmax[ja[jj]] * sum[jj],            /* Awekar    */
+          max[jj] * tmpsum[ja[jj]],            /* ...       */
+          tmplen[ja[jj]] + len[jj]             /* Anastasiu */
         );
         if (s + ub3 < minsim) {
           s = 0.0;
@@ -227,6 +241,8 @@ verify(
   BLAS_vsctrz(ia[i + 1] - ia[i], ja + ia[i], tmpspa);
 
   return ncnt;
+
+  (void)rs1;
 }
 
 /*----------------------------------------------------------------------------*/
@@ -271,6 +287,10 @@ apss_nova(
   val_t  const * const m_max = pp->m_max;
   val_t  const * const m_sum = pp->m_sum;
   val_t  const * const m_len = pp->m_len;
+  val_t  const * const m_cmx = pp->m_cmx;
+  val_t  const * const m_csm = pp->m_csm;
+  val_t  const * const m_cln = pp->m_cln;
+  val_t  const * const i_rs1 = pp->i_rs1;
   val_t  const * const i_max = pp->i_max;
   val_t  const * const i_sum = pp->i_sum;
   val_t  const * const i_len = pp->i_len;
@@ -312,14 +332,14 @@ apss_nova(
   s_ia[0] = 0;
   for (ind_t i = 0; i < m_nr; i++) {
     /* generate candidate vectors */
-    ind_t const cnt = generate(minsim, i, m_ia, m_ja, m_ka, m_ra, m_a, m_rs1,
-                               m_max, m_sum, m_len, i_ia, i_ja, i_a, i_max,
-                               i_sum, i_len, marker, tmpcnd);
+    ind_t const cnt = generate(minsim, i, m_ia, m_ja, m_ra, m_a, m_rs1, m_max,
+                               m_sum, m_len, m_cmx, m_csm, m_cln, i_ia, i_ja,
+                               i_a, i_rs1, i_max, i_sum, i_len, marker, tmpcnd);
 
     /* verify candidate vectors */
-    ind_t const ncnt = verify(minsim, cnt, i, m_ia, m_ja, m_ka, m_a, m_max,
-                              m_sum, m_len, pscore, marker, tmpmax, tmpsum,
-                              tmplen, tmpspa, tmpcnd);
+    ind_t const ncnt = verify(minsim, cnt, i, m_ia, m_ja, m_ka, m_a, m_rs1,
+                              m_max, m_sum, m_len, pscore, marker, tmpmax,
+                              tmpsum, tmplen, tmpspa, tmpcnd);
 
     /* update global counters */
     apss_ncand += cnt;

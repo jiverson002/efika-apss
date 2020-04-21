@@ -23,106 +23,108 @@ typedef struct {
 } Stat;
 
 /*----------------------------------------------------------------------------*/
-/* Precompute prefix for a single row. */
-/*----------------------------------------------------------------------------*/
-static inline Stat
-filt_row(
-  val_t const minsim,
-  ind_t const n,
-  ind_t const * const ja,
-  val_t const * const a,
-  val_t       * const rowmax,
-  val_t       * const rowsum,
-  val_t       * const rowsqr,
-  val_t       * const rowlen,
-  val_t const * const colmax,
-  val_t const * const colmax_,
-  val_t const * const colsum_,
-  val_t const * const colsqr_,
-  val_t const * const collen_
-)
-{
-  rowmax[0] = a[0];        /* Awekar    */
-  rowsum[0] = a[0];        /* ...       */
-  rowsqr[0] = a[0] * a[0]; /* Anastasiu */
-  rowlen[0] = a[0];        /* ...       */
-
-  /* XXX: Due to rounding error, this could actually be slightly above 1.0.
-   *      This could easily be corrected with:
-   *
-   *      clen = clen <= 1.0 ? clen : 1.0;
-   */
-  val_t clen = BIT_sum(ja[0], collen_, BIT_op_max);
-
-  /* Bayardo bound */
-  val_t b1 = a[0] * colmax[ja[0]];
-
-  /* dot-product upper-bound */
-  val_t ub = min(
-    b1,                      /* Bayardo  */
-    rowlen[0] * clen         /* Anastasiu */
-  );
-
-  ind_t j = 1;
-  val_t pscore = 0.0;
-  for (; j < n && ub < minsim; j++) {
-    rowmax[j] = BIT_op_max(rowmax[j - 1], a[j]);
-    rowsum[j] = BIT_op_sum(rowsum[j - 1], a[j]);
-    rowsqr[j] = BIT_op_sum(rowsqr[j - 1], a[j] * a[j]);
-    rowlen[j] = sqrtv(rowsqr[j]);
-
-    /* record pscore before updating ub */
-    pscore = ub;
-
-    clen = BIT_sum(ja[j], collen_, BIT_op_max);
-
-    b1 += a[j] * colmax[ja[j]];
-
-    ub = min(
-      b1,                      /* Bayardo   */
-      rowlen[j] * clen         /* Anastasiu */
-    );
-  }
-
-  for (ind_t jj = j; jj < n; jj++) {
-    rowmax[jj] = BIT_op_max(rowmax[jj - 1], a[jj]);
-    rowsum[jj] = BIT_op_sum(rowsum[jj - 1], a[jj]);
-    rowsqr[jj] = BIT_op_sum(rowsqr[jj - 1], a[jj] * a[jj]);
-    rowlen[jj] = sqrtv(rowsqr[jj]);
-  }
-
-  /* return prefix split */
-  return (Stat){ j - 1, pscore };
-
-  (void)colmax_;
-  (void)colsum_;
-  (void)colsqr_;
-}
-
-/*----------------------------------------------------------------------------*/
 /* Precompute prefix statistics for a single row. */
 /*----------------------------------------------------------------------------*/
 static inline void
 stat_row(
   ind_t const nc,
   ind_t const n,
-  ind_t const * const ja,
-  val_t const * const rowmax,
-  val_t const * const rowsum,
-  val_t const * const rowsqr,
-  val_t const * const rowlen,
-  val_t       * const colmax,
-  val_t       * const colsum,
-  val_t       * const colsqr,
-  val_t       * const collen
+  ind_t const * const restrict ja,
+  val_t const * const restrict a,
+  val_t       * const restrict rowrs1,
+  val_t       * const restrict rowmax,
+  val_t       * const restrict rowsum,
+  val_t       * const restrict rowsqr,
+  val_t       * const restrict rowlen,
+  val_t       * const restrict rowcmx,
+  val_t       * const restrict rowcsm,
+  val_t       * const restrict rowcln,
+  val_t       * const restrict colmax_,
+  val_t       * const restrict colmax,
+  val_t       * const restrict colsum,
+  val_t       * const restrict collen
 )
 {
-  for (ind_t j = 0; j < n; j++) {
-    BIT_add(rowmax[j], nc, ja[j], colmax, BIT_op_max);
-    BIT_add(rowsum[j], nc, ja[j], colsum, BIT_op_max);
-    BIT_add(rowsqr[j], nc, ja[j], colsqr, BIT_op_max);
-    BIT_add(rowlen[j], nc, ja[j], collen, BIT_op_max);
+  rowrs1[0] = a[0] * colmax_[ja[0]]; /* Bayardo   */
+  rowmax[0] = a[0];                  /* Awekar    */
+  rowsum[0] = a[0];                  /* ...       */
+  rowsqr[0] = a[0] * a[0];           /* Anastasiu */
+  rowlen[0] = a[0];                  /* ...       */
+
+  /* ...coalesced BIT query... */
+  rowcmx[0] = 0.0;
+  rowcsm[0] = 0.0;
+  rowcln[0] = 0.0;
+  for (ind_t k = ja[0] + 1; k > 0; k -= BIT_lsb(k)) {
+    rowcmx[0] = BIT_op_max(rowcmx[0], colmax[k]);
+    rowcsm[0] = BIT_op_max(rowcsm[0], colsum[k]);
+    rowcln[0] = BIT_op_max(rowcln[0], collen[k]);
   }
+
+  for (ind_t j = 1; j < n; j++) {
+    rowrs1[j] = BIT_op_sum(rowrs1[j - 1], a[j] * colmax_[ja[j]]);
+    rowmax[j] = BIT_op_max(rowmax[j - 1], a[j]);
+    rowsum[j] = BIT_op_sum(rowsum[j - 1], a[j]);
+    rowsqr[j] = BIT_op_sum(rowsqr[j - 1], a[j] * a[j]);
+    rowlen[j] = sqrtv(rowsqr[j]);
+
+    /* ...coalesced BIT query... */
+    rowcmx[j] = 0.0;
+    rowcsm[j] = 0.0;
+    rowcln[j] = 0.0;
+    for (ind_t k = ja[j] + 1; k > 0; k -= BIT_lsb(k)) {
+      rowcmx[j] = BIT_op_max(rowcmx[j], colmax[k]);
+      rowcsm[j] = BIT_op_max(rowcsm[j], colsum[k]);
+      rowcln[j] = BIT_op_max(rowcln[j], collen[k]);
+    }
+  }
+
+  for (ind_t j = 0; j < n; j++) {
+    colmax_[ja[j]] = BIT_op_max(colmax_[ja[j]], a[j]);
+
+    /* ...coalesced BIT update... */
+    for (ind_t k = ja[j] + 1; k <= nc; k += BIT_lsb(k)) {
+      colmax[k] = BIT_op_max(colmax[k], rowmax[j]);
+      colsum[k] = BIT_op_max(colsum[k], rowsum[j]);
+      collen[k] = BIT_op_max(collen[k], rowlen[j]);
+    }
+  }
+}
+
+/*----------------------------------------------------------------------------*/
+/* Precompute prefix for a single row. */
+/*----------------------------------------------------------------------------*/
+static inline Stat
+filt_row(
+  val_t const minsim,
+  ind_t const n,
+  val_t const * const restrict rs1,
+  val_t const * const restrict max,
+  val_t const * const restrict sum,
+  val_t const * const restrict len,
+  val_t const * const restrict cmx,
+  val_t const * const restrict csm,
+  val_t const * const restrict cln
+)
+{
+  ind_t j = 0;
+  val_t pscore = 0.0;
+  val_t ub = 0.0;
+  for (; j < n && ub < minsim; j++) {
+    /* record pscore before updating ub */
+    pscore = ub;
+
+    /* dot-product upper-bound */
+    ub = min4(
+      rs1[j],          /* Bayardo  */
+      max[j] * csm[j], /* Awekar    */
+      cmx[j] * sum[j], /* ...       */
+      len[j] * cln[j]  /* Anastasiu */
+    );
+  }
+
+  /* return prefix split */
+  return (Stat){ j - 1, pscore };
 }
 
 /*----------------------------------------------------------------------------*/
@@ -133,73 +135,72 @@ rfilt(
   val_t const minsim,
   ind_t const nr,
   ind_t const nc,
-  ind_t const * const ia,
-  ind_t const * const ja,
-  val_t const * const a,
-  ind_t       * const ka,
-  val_t       * const rs1,
-  val_t       * const max,
-  val_t       * const sum,
-  val_t       * const sqr,
-  val_t       * const len,
-  val_t       * const pscore
+  ind_t const * const restrict ia,
+  ind_t const * const restrict ja,
+  val_t const * const restrict a,
+  ind_t       * const restrict ka,
+  val_t       * const restrict rs1,
+  val_t       * const restrict max,
+  val_t       * const restrict sum,
+  val_t       * const restrict sqr,
+  val_t       * const restrict len,
+  val_t       * const restrict cmx,
+  val_t       * const restrict csm,
+  val_t       * const restrict cln,
+  val_t       * const restrict pscore
 )
 {
   /* ...garbage collected function... */
   GC_func_init();
 
   /* allocate scratch memory */
-  val_t * const colmax  = GC_calloc(nc, sizeof(*colmax));
-  val_t * const colmax_ = GC_calloc((nc + 1), sizeof(*colmax_));
-  val_t * const colsum_ = GC_calloc((nc + 1), sizeof(*colsum_));
-  val_t * const colsqr_ = GC_calloc((nc + 1), sizeof(*colsqr_));
-  val_t * const collen_ = GC_calloc((nc + 1), sizeof(*collen_));
+  val_t * const colmax_ = GC_calloc(nc, sizeof(*colmax_));
+  val_t * const tmpcmx = GC_calloc(nc, sizeof(*tmpcmx));
+  val_t * const tmpcsm = GC_calloc(nc, sizeof(*tmpcsm));
+  val_t * const tmpcln = GC_calloc(nc, sizeof(*tmpcln));
+  val_t * const colmax = GC_calloc((nc + 1), sizeof(*colmax));
+  val_t * const colsum = GC_calloc((nc + 1), sizeof(*colsum));
+  val_t * const collen = GC_calloc((nc + 1), sizeof(*collen));
 
   for (ind_t ip1 = nr; ip1 > 0; ip1--) {
     ind_t i = ip1 - 1;
 
-    /* find prefix split and pscore for each row_i */
-    Stat const pfx = filt_row(minsim, ia[i + 1] - ia[i], ja + ia[i], a + ia[i],
-                              max + ia[i], sum + ia[i], sqr + ia[i], len +
-                              ia[i], colmax, colmax_, colsum_, colsqr_,
-                              collen_);
-    ka[i] = ia[i] + pfx.n;
-    pscore[i] = pfx.pscore;
-
     /* update global stats for each row_i */
-    stat_row(nc, ia[i + 1] - ia[i], ja + ia[i], max + ia[i], sum + ia[i],
-             sqr + ia[i], len + ia[i], colmax_, colsum_, colsqr_, collen_);
+    stat_row(nc, ia[i + 1] - ia[i], ja + ia[i], a + ia[i], rs1 + ia[i],
+             max + ia[i], sum + ia[i], sqr + ia[i], len + ia[i], tmpcmx,
+             tmpcsm, tmpcln, colmax_, colmax, colsum, collen);
 
-    /* update column maximums */
-    for (ind_t j = ia[i]; j < ia[i + 1]; j++)
-      if (a[j] > colmax[ja[j]])
-        colmax[ja[j]] = a[j];
-  }
-
-  /* reset colmax */
-  memset(colmax, 0, nc * sizeof(*colmax));
-
-  for (ind_t i = 0; i < nr; i++) {
-    /* compute final remscore */
-    for (ind_t j = ia[i]; j < ia[i + 1]; j++)
-      rs1[ia[i + 1] - 1] += a[j] * colmax[ja[j]];
-
-    /* compute remscores */
-    for (ind_t jp1 = ia[i + 1] - 1; jp1 > ia[i]; jp1--)
-      rs1[jp1 - 1] = rs1[jp1] - a[jp1] * colmax[ja[jp1]];
-
-    /* update column maximums */
-    for (ind_t j = ia[i]; j < ia[i + 1]; j++)
-      if (a[j] > colmax[ja[j]])
-        colmax[ja[j]] = a[j];
+    /* find prefix split and pscore for each row_i */
+    Stat const pfx = filt_row(minsim, ia[i + 1] - ia[i], rs1 + ia[i],
+                              max + ia[i], sum + ia[i], len + ia[i],
+                              tmpcmx, tmpcsm, tmpcln);
+    ka[i]     = ia[i] + pfx.n;
+    pscore[i] = pfx.pscore;
   }
 
   /* free scratch memory */
-  GC_free(colmax);
+  GC_free(tmpcmx);
+  GC_free(tmpcsm);
+  GC_free(tmpcln);
+
+  /* reset stats */
+  memset(colmax_, 0, nc * sizeof(*colmax_));
+  memset(colmax, 0, (nc + 1) * sizeof(*colmax));
+  memset(colsum, 0, (nc + 1) * sizeof(*colsum));
+  memset(collen, 0, (nc + 1) * sizeof(*collen));
+
+  for (ind_t i = 0; i < nr; i++) {
+    /* update global stats for each row_i */
+    stat_row(nc, ia[i + 1] - ia[i], ja + ia[i], a + ia[i], rs1 + ia[i],
+             max + ia[i], sum + ia[i], sqr + ia[i], len + ia[i], cmx + ia[i],
+             csm + ia[i], cln + ia[i], colmax_, colmax, colsum, collen);
+  }
+
+  /* free scratch memory */
   GC_free(colmax_);
-  GC_free(colsum_);
-  GC_free(colsqr_);
-  GC_free(collen_);
+  GC_free(colmax);
+  GC_free(colsum);
+  GC_free(collen);
 
   return 0;
 }
@@ -215,6 +216,7 @@ csrcsc(
   ind_t const * const restrict ja,
   ind_t const * const restrict ka,
   val_t const * const restrict acsr,
+  val_t const * const restrict rs1,
   val_t const * const restrict max,
   val_t const * const restrict sum,
   val_t const * const restrict sqr,
@@ -222,6 +224,7 @@ csrcsc(
   ind_t       * const restrict ia1,
   ind_t       * const restrict ja1,
   val_t       * const restrict acsc,
+  val_t       * const restrict rs11,
   val_t       * const restrict max1,
   val_t       * const restrict sum1,
   val_t       * const restrict sqr1,
@@ -244,6 +247,7 @@ csrcsc(
     for (ind_t j = ka[i]; j < ia[i + 1]; j++) {
       ja1[ia1[ja[j]]]    = i;
       acsc[ia1[ja[j]]]   = acsr[j];
+      rs11[ia1[ja[j]]]   = rs1[j];
       max1[ia1[ja[j]]]   = max[j];
       sum1[ia1[ja[j]]]   = sum[j];
       sqr1[ia1[ja[j]]]   = sqr[j];
@@ -263,11 +267,13 @@ static int
 fiidx(
   Matrix const * const M,
   ind_t  const * const m_ka,
+  val_t  const * const m_rs1,
   val_t  const * const m_max,
   val_t  const * const m_sum,
   val_t  const * const m_sqr,
   val_t  const * const m_len,
   Matrix       * const I,
+  val_t ** const i_rs1,
   val_t ** const i_max,
   val_t ** const i_sum,
   val_t ** const i_sqr,
@@ -293,13 +299,14 @@ fiidx(
   ind_t * const i_ia  = GC_malloc((m_nc + 1) * sizeof(*i_ia));
   ind_t * const i_ja  = GC_malloc(i_nnz * sizeof(*i_ja));
   val_t * const i_a   = GC_malloc(i_nnz * sizeof(*i_a));
+               *i_rs1 = GC_malloc(i_nnz * sizeof(*i_rs1));
                *i_max = GC_malloc(i_nnz * sizeof(*i_max));
                *i_sum = GC_malloc(i_nnz * sizeof(*i_sum));
                *i_sqr = GC_malloc(i_nnz * sizeof(*i_sqr));
                *i_len = GC_malloc(i_nnz * sizeof(*i_len));
 
-  csrcsc(m_nr, m_nc, m_ia, m_ja, m_ka, m_a, m_max, m_sum, m_sqr, m_len, i_ia,
-         i_ja, i_a, *i_max, *i_sum, *i_sqr, *i_len);
+  csrcsc(m_nr, m_nc, m_ia, m_ja, m_ka, m_a, m_rs1, m_max, m_sum, m_sqr, m_len,
+         i_ia, i_ja, i_a, *i_rs1, *i_max, *i_sum, *i_sqr, *i_len);
 
   /* record relevant info in /I/ */
   I->nr  = m_nc;
@@ -379,17 +386,21 @@ pp_free(
   free(pp->ka);
   free(pp->ra);
 
+  free(pp->m_rs1);
   free(pp->m_max);
   free(pp->m_sum);
   free(pp->m_sqr);
   free(pp->m_len);
+  free(pp->m_cmx);
+  free(pp->m_csm);
+  free(pp->m_cln);
 
+  free(pp->i_rs1);
   free(pp->i_max);
   free(pp->i_sum);
   free(pp->i_sqr);
   free(pp->i_len);
 
-  free(pp->m_rs1);
   free(pp->pscore);
 }
 
@@ -443,7 +454,11 @@ apss_nova_pp(
   val_t * const m_sum = GC_calloc(m_nnz, sizeof(*m_sum));
   val_t * const m_sqr = GC_calloc(m_nnz, sizeof(*m_sqr));
   val_t * const m_len = GC_calloc(m_nnz, sizeof(*m_len));
+  val_t * const m_cmx = GC_calloc(m_nnz, sizeof(*m_cmx));
+  val_t * const m_csm = GC_calloc(m_nnz, sizeof(*m_csm));
+  val_t * const m_cln = GC_calloc(m_nnz, sizeof(*m_cln));
   val_t * const pscore = GC_calloc(m_nr, sizeof(*pscore));
+  val_t * i_rs1;
   val_t * i_max;
   val_t * i_sum;
   val_t * i_sqr;
@@ -455,12 +470,12 @@ apss_nova_pp(
 
   /* precompute row prefixes and their statistics */
   err = rfilt(minsim, m_nr, m_nc, m_ia, m_ja, m_a, m_ka, m_rs1, m_max, m_sum,
-              m_sqr, m_len, pscore);
+              m_sqr, m_len, m_cmx, m_csm, m_cln, pscore);
   GC_assert(!err);
 
   /* precompute dynamic inverted index */
-  err = fiidx(M, m_ka, m_max, m_sum, m_sqr, m_len, I, &i_max, &i_sum, &i_sqr,
-              &i_len);
+  err = fiidx(M, m_ka, m_rs1, m_max, m_sum, m_sqr, m_len, I, &i_rs1, &i_max,
+              &i_sum, &i_sqr, &i_len);
   GC_assert(!err);
 
   /* precompute dynamic inverted index */
@@ -470,16 +485,21 @@ apss_nova_pp(
   /* record info in /pp/ */
   pp->ka    = m_ka;
   pp->ra    = m_ra;
+  pp->m_rs1 = m_rs1;
   pp->m_max = m_max;
   pp->m_sum = m_sum;
   pp->m_sqr = m_sqr;
   pp->m_len = m_len;
+  pp->m_cmx = m_cmx;
+  pp->m_csm = m_csm;
+  pp->m_cln = m_cln;
+
+  pp->i_rs1 = i_rs1;
   pp->i_max = i_max;
   pp->i_sum = i_sum;
   pp->i_sqr = i_sqr;
   pp->i_len = i_len;
 
-  pp->m_rs1 = m_rs1;
   pp->pscore = pscore;
 
   /* record payload in /M/ */

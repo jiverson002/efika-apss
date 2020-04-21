@@ -24,18 +24,24 @@ struct pp_payld
   Matrix I;
   ind_t *ka;
   ind_t *ra;
+  val_t *m_rs1;
   val_t *m_max;
   val_t *m_sum;
   val_t *m_sqr;
   val_t *m_len;
+  val_t *i_rs1;
   val_t *i_max;
   val_t *i_sum;
   val_t *i_sqr;
   val_t *i_len;
 
-  val_t *m_rs1;
-  val_t *m_rs3;
-  val_t *i_rs3;
+  val_t *m_cmx;
+  val_t *m_csm;
+  val_t *m_cln;
+  val_t *i_cmx;
+  val_t *i_csm;
+  val_t *i_cln;
+
   val_t *pscore;
 };
 
