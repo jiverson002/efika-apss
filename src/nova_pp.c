@@ -1,7 +1,5 @@
 /* SPDX-License-Identifier: MIT */
-#include <assert.h>
 #include <math.h>
-#include <stdio.h>
 #include <string.h>
 
 #include "efika/apss.h"
@@ -216,7 +214,6 @@ filter(
 
   /* reset stats */
   memset(colmax_, 0, nc * sizeof(*colmax_));
-  memset(tmprs1, 0, nc * sizeof(*tmprs1));
   memset(colmax, 0, (nc + 1) * sizeof(*colmax));
   memset(colsum, 0, (nc + 1) * sizeof(*colsum));
   memset(collen, 0, (nc + 1) * sizeof(*collen));
@@ -488,10 +485,10 @@ apss_nova_pp(
   /* allocate memory for other preprocessed data */
   ind_t * const m_ka  = GC_malloc(m_nr * sizeof(*m_ka));
   ind_t * const m_ra  = GC_malloc(m_nnz * sizeof(*m_ra));
-  val_t * const m_max = GC_calloc(m_nnz, sizeof(*m_max));
-  val_t * const m_sum = GC_calloc(m_nnz, sizeof(*m_sum));
-  val_t * const m_sqr = GC_calloc(m_nnz, sizeof(*m_sqr));
-  val_t * const m_len = GC_calloc(m_nnz, sizeof(*m_len));
+  val_t * const m_max = GC_malloc(m_nnz * sizeof(*m_max));
+  val_t * const m_sum = GC_malloc(m_nnz * sizeof(*m_sum));
+  val_t * const m_sqr = GC_malloc(m_nnz * sizeof(*m_sqr));
+  val_t * const m_len = GC_malloc(m_nnz * sizeof(*m_len));
   val_t * const m_rs1 = GC_malloc(m_nnz * sizeof(*m_rs1));
   ind_t * const psplit = GC_malloc(m_nr * sizeof(*psplit));
   val_t * const pscore = GC_malloc(m_nr * sizeof(*pscore));
