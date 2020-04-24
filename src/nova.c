@@ -5,7 +5,6 @@
 
 #include "efika/apss.h"
 
-#include "efika/apss/bit.h"
 #include "efika/apss/nova.h"
 #include "efika/apss/export.h"
 #include "efika/apss/rename.h"
@@ -73,7 +72,6 @@ generate(
 
     /* iterate through the rows, k,  that have indexed column j */
     for (ind_t kk = ra; kk < i_ia[j + 1]; kk++) {
-      val_t ub1;
       ind_t const k = i_ja[kk];
       val_t const w = i_a[kk];
       ind_t       m = marker[k];
@@ -100,13 +98,20 @@ generate(
         /* fall-through */
 
         default:
-        ub1 = min4(
-          i_rs1[kk],       /* Bayardo   */
-          max * i_sum[kk], /* Awekar    */
-          i_max[kk] * sum, /* ...       */
-          len * i_len[kk]  /* Anastasiu */
-        );
-        if (tmpcnd[m].sim + ub1 < minsim) {
+#if 1
+        (void)max;
+        (void)sum;
+        (void)i_max;
+        (void)i_sum;
+        (void)i_rs1;
+        if ( tmpcnd[m].sim + len * i_len[kk] < minsim ) /* Anastasiu */
+#else
+        if ( tmpcnd[m].sim + len * i_len[kk] < minsim   /* Anastasiu */
+          || tmpcnd[m].sim + i_rs1[kk]       < minsim   /* Bayardo   */
+          || tmpcnd[m].sim + max * i_sum[kk] < minsim   /* Awekar    */
+          || tmpcnd[m].sim + i_max[kk] * sum < minsim ) /* ...       */
+#endif
+        {
           marker[k] = PRUNED;
           break;
         }
@@ -150,15 +155,18 @@ verify(
 {
   ind_t ncnt = 0;
 
-  BLAS_vsctr(ia[i + 1] - ia[i],   a + ia[i], ja + ia[i], tmpspa);
-  BLAS_vsctr(ia[i + 1] - ia[i], max + ia[i], ja + ia[i], tmpmax);
-  BLAS_vsctr(ia[i + 1] - ia[i], sum + ia[i], ja + ia[i], tmpsum);
-  BLAS_vsctr(ia[i + 1] - ia[i], len + ia[i], ja + ia[i], tmplen);
+  for (ind_t j = ia[i]; j < ia[i + 1]; j++) {
+    tmpmax[ja[j]] = max[j];
+    tmpsum[ja[j]] = sum[j];
+    tmplen[ja[j]] = len[j];
+    tmpspa[ja[j]] = a[j];
+  }
 
   for (ind_t j = 0; j < cnt; j++) {
     ind_t const k = tmpcnd[j].ind;
     val_t       s = tmpcnd[j].sim;
     ind_t const m = marker[k];
+    val_t       remsim = minsim - s;
 
     /* reset markers to unknown value */
     marker[k] = UNKNOWN;
@@ -172,31 +180,30 @@ verify(
     }
 
     /* -----------------------------------------------------------------------*/
-    val_t const ub1 = min3(
-      max[ia[i + 1] - 1] * sum[ka[k] - 1], /* Awekar    */
-      max[ka[k] - 1] * sum[ia[i + 1] - 1], /* ...       */
-      pscore[k]
-    );
-    if (s + ub1 < minsim)
+    if ( pscore[k]                           < remsim   /* Anastasiu */
+      || rs1[ka[k] - 1]                      < remsim   /* Bayardo   */
+      || max[ia[i + 1] - 1] * sum[ka[k] - 1] < remsim   /* Awekar    */
+      || max[ka[k] - 1] * sum[ia[i + 1] - 1] < remsim ) /* ...       */
       continue;
 
     /* -----------------------------------------------------------------------*/
-    /* Anastasiu dot product */
     for (ind_t jjp1 = ka[k]; jjp1 > ia[k]; jjp1--) {
       ind_t const jj = jjp1 - 1;
       if (tmpspa[ja[jj]] > 0.0) {
-#if 1
-        val_t const ub2 = min4(
-          rs1[jj],                  /* Bayardo   */
-          tmpmax[ja[jj]] * sum[jj], /* Awekar    */
-          max[jj] * tmpsum[ja[jj]], /* ...       */
-          tmplen[ja[jj]] + len[jj]  /* Anastasiu */
-        );
-        if (s + ub2 < minsim) {
+        remsim = minsim - s;
+
+#if 0
+        if ( tmplen[ja[jj]] * len[jj] < remsim ) /* Anastasiu */
+#else
+        if ( tmplen[ja[jj]] * len[jj] < remsim   /* Anastasiu */
+          || rs1[jj]                  < remsim   /* Bayardo   */
+          || tmpmax[ja[jj]] * sum[jj] < remsim   /* Awekar    */
+          || max[jj] * tmpsum[ja[jj]] < remsim ) /* ...       */
+#endif
+        {
           s = 0.0;
           break;
         }
-#endif
 
         s += tmpspa[ja[jj]] * a[jj];
 
@@ -215,10 +222,12 @@ verify(
     apss_nvdot++;
   }
 
-  BLAS_vsctrz(ia[i + 1] - ia[i], ja + ia[i], tmpmax);
-  BLAS_vsctrz(ia[i + 1] - ia[i], ja + ia[i], tmpsum);
-  BLAS_vsctrz(ia[i + 1] - ia[i], ja + ia[i], tmplen);
-  BLAS_vsctrz(ia[i + 1] - ia[i], ja + ia[i], tmpspa);
+  for (ind_t j = ia[i]; j < ia[i + 1]; j++) {
+    tmpmax[ja[j]] = 0.0;
+    tmpsum[ja[j]] = 0.0;
+    tmplen[ja[j]] = 0.0;
+    tmpspa[ja[j]] = 0.0;
+  }
 
   return ncnt;
 }
