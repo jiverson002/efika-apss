@@ -95,19 +95,16 @@ split_row(
   val_t rs1 = 0.0;
 
   for (ind_t j = 0; j < n; j++) {
-    sqr += a[j] * a[j];          /* Anastasiu */
-    rs1 += a[j] * colmax[ja[j]]; /* Bayardo   */
+    sqr += a[j] * a[j];
+    rs1 += a[j] * colmax[ja[j]];
 
     rowlen[j] = sqrtv(sqr);
 
-    /* dot-product upper-bound */
-    val_t const ub = min(
-      rs1,      /* Bayardo  */
-      rowlen[j] /* Anastasiu */
-    );
-
-    if (ub >= minsim)
+    if ( rowlen[j] >= minsim   /* Bayardo   */
+      && rs1       >= minsim ) /* Anastasiu */
+    {
       return j;
+    }
 
     colmax[ja[j]] = max(colmax[ja[j]], a[j]);
   }

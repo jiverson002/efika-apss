@@ -55,6 +55,7 @@ generate(
 )
 {
   ind_t cnt = 0;
+  ind_t nprun = 0;
 
   /* iterate through each non-zero column, j, for this row */
   for (ind_t jj = m_ia[i + 1]; jj > m_ia[i]; jj--) {
@@ -69,6 +70,10 @@ generate(
 
     /* determine if any new candidates should be allowed */
     bool const allow_unknown = jj > psplit[i];
+
+    /* shortcut search if no more accumulation is necessary */
+    if (!allow_unknown && nprun == cnt)
+      break;
 
     /* iterate through the rows, k,  that have indexed column j */
     for (ind_t kk = ra; kk < i_ia[j + 1]; kk++) {
@@ -92,7 +97,7 @@ generate(
         tmpcnd[cnt].ind = k;
         tmpcnd[cnt].sim = 0.0;
 
-        /* populate marker and updated m */
+        /* populate marker and update m */
         m = marker[k] = cnt++;
 
         /* fall-through */
@@ -113,6 +118,7 @@ generate(
 #endif
         {
           marker[k] = PRUNED;
+          nprun++;
           break;
         }
 
@@ -181,7 +187,6 @@ verify(
 
     /* -----------------------------------------------------------------------*/
     if ( pscore[k]                           < remsim   /* Anastasiu */
-      || rs1[ka[k] - 1]                      < remsim   /* Bayardo   */
       || max[ia[i + 1] - 1] * sum[ka[k] - 1] < remsim   /* Awekar    */
       || max[ka[k] - 1] * sum[ia[i + 1] - 1] < remsim ) /* ...       */
       continue;
