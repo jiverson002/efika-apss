@@ -4,11 +4,6 @@ cmake_minimum_required(VERSION 3.14)
 # Subproject of efika
 project(efika-apss)
 
-# Include build configurations (compiler standards, options, etc.)
-if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND EFIKA_BUILDCONFIG_FILE)
-  include(${EFIKA_BUILDCONFIG_FILE})
-endif()
-
 # Include required CMake modules
 include(GenerateExportHeader)
 include(FetchContent)
@@ -41,7 +36,7 @@ add_library(Efika::apss    ALIAS ${PROJECT_NAME})
 add_library(EfikaSDK::apss ALIAS ${PROJECT_NAME}-sdk)
 
 #-------------------------------------------------------------------------------
-# Declare efika dependencies
+# DEPENDENCY configuration
 #-------------------------------------------------------------------------------
 foreach(dep core)
   FetchContent_Declare(efika-${dep}
@@ -53,7 +48,7 @@ foreach(dep core)
 endforeach()
 
 #-------------------------------------------------------------------------------
-# Unit test configuration
+# UNIT TEST configuration
 #-------------------------------------------------------------------------------
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   include(CTest)
