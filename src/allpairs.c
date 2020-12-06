@@ -296,6 +296,7 @@ apss_allpairs(
   /* free preprocessed data (if it was allocated here) */
   if (freepp) {
     M->pp_free(M->pp);
+    free(M->pp);
     M->pp = NULL;
   }
 
