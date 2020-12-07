@@ -34,7 +34,7 @@ gtest_discover_tests(${PROJECT_NAME}-tests
 #-------------------------------------------------------------------------------
 foreach(dep core data io)
   FetchContent_Declare(efika-${dep}
-    GIT_REPOSITORY git@github.com:jiverson002/efika-${dep}.git)
+    GIT_REPOSITORY https://github.com/jiverson002/efika-${dep}.git)
 
   FetchContent_MakeAvailable(efika-${dep})
 

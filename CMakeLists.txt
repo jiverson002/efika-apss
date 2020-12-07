@@ -40,7 +40,7 @@ add_library(EfikaSDK::apss ALIAS ${PROJECT_NAME}-sdk)
 #-------------------------------------------------------------------------------
 foreach(dep core)
   FetchContent_Declare(efika-${dep}
-    GIT_REPOSITORY git@github.com:jiverson002/efika-${dep}.git)
+    GIT_REPOSITORY https://github.com/jiverson002/efika-${dep}.git)
 
   FetchContent_MakeAvailable(efika-${dep})
 

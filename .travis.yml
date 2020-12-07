@@ -6,6 +6,7 @@ dist: xenial
 branches:
   only:
     - master
+    - nova
 
 # Keep CMake up-to-date
 addons:
@@ -37,4 +38,8 @@ before_script:
 
 # Override default script.
 script:
-  - $CMAKE -DEFIKA_BUILDCONFIG_FILE=dev-buildconfig . && $CMAKE --build . && $CTEST --output-on-failure
+  - $CMAKE -Cdev-buildconfig . &&
+      sed -i '/bms_pos.clu/d' _deps/efika-data-build/include/efika/data.h &&
+      sed -i '/groceries.clu/d' _deps/efika-data-build/include/efika/data.h &&
+      $CMAKE --build . &&
+      $CTEST --output-on-failure
