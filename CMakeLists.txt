@@ -5,7 +5,6 @@ cmake_minimum_required(VERSION 3.14)
 project(efika-apss)
 
 # Include required CMake modules
-include(GenerateExportHeader)
 include(FetchContent)
 
 #-------------------------------------------------------------------------------
@@ -14,11 +13,6 @@ include(FetchContent)
 add_library(${PROJECT_NAME}     OBJECT)
 add_library(${PROJECT_NAME}-sdk INTERFACE)
 
-generate_export_header(${PROJECT_NAME}
-  EXPORT_FILE_NAME efika/apss/export.h
-  BASE_NAME        apss
-  PREFIX_NAME      EFIKA_)
-
 target_sources(${PROJECT_NAME}
   PRIVATE src/allpairs.c src/allpairs_pp.c src/bruteforce.c src/bruteforce_pp.c
           src/globals.c src/idxjoin.c src/idxjoin_pp.c src/l2ap.c src/l2ap_pp.c
@@ -26,8 +20,7 @@ target_sources(${PROJECT_NAME}
 
 target_include_directories(${PROJECT_NAME}
   PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/include
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/include
-          ${CMAKE_CURRENT_BINARY_DIR})
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/include)
 
 target_include_directories(${PROJECT_NAME}-sdk
   INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src/include)

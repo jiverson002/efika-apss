@@ -3,14 +3,14 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#include "efika/core.h"
 #include "efika/apss.h"
+#include "efika/core.h"
 
+#include "efika/apss/rename.h"
+#include "efika/core/export.h"
 #include "efika/core/gc.h"
 #include "efika/core/pp.h"
 #include "efika/core/rename.h"
-#include "efika/apss/export.h"
-#include "efika/apss/rename.h"
 
 
 #define BRUTE_FORCE_THRESHOLD 256
@@ -593,7 +593,7 @@ sfrkd_2(val_t const minsim, Matrix const * const M, Matrix const * const I,
 }
 
 
-EFIKA_APSS_EXPORT int
+EFIKA_EXPORT int
 apss_sfr0d(val_t const minsim, Matrix const * const M, Vector * const A)
 {
   if (!pp_all(M, A))
@@ -602,7 +602,7 @@ apss_sfr0d(val_t const minsim, Matrix const * const M, Vector * const A)
   return sfr0d_1(minsim, M, A);
 }
 
-EFIKA_APSS_EXPORT int
+EFIKA_EXPORT int
 apss_sfrkd(val_t const minsim, Matrix const * const M, Matrix const * const I,
            Vector * const A)
 {

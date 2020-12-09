@@ -4,11 +4,12 @@
 #include <string.h>
 
 #include "efika/apss.h"
+#include "efika/core.h"
 
 #include "efika/apss/nova.h"
-#include "efika/apss/export.h"
 #include "efika/apss/rename.h"
 #include "efika/core/blas.h"
+#include "efika/core/export.h"
 #include "efika/core/gc.h"
 #include "efika/core/pp.h"
 
@@ -240,7 +241,7 @@ verify(
 /*----------------------------------------------------------------------------*/
 /*! Function to compute APSS of a matrix. */
 /*----------------------------------------------------------------------------*/
-EFIKA_APSS_EXPORT int
+EFIKA_EXPORT int
 apss_nova(
   val_t const minsim,
   Matrix * const M,

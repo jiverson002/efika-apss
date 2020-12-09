@@ -4,13 +4,13 @@
 #include "efika/apss.h"
 #include "efika/core.h"
 
-#include "efika/apss/export.h"
 #include "efika/apss/rename.h"
 #include "efika/core/blas.h"
+#include "efika/core/export.h"
 #include "efika/core/gc.h"
 #include "efika/core/pp.h"
 
-EFIKA_APSS_EXPORT int
+EFIKA_EXPORT int
 apss_bruteforce(val_t const minsim, Matrix * const M, Matrix * const S)
 {
   /* ...garbage collected function... */

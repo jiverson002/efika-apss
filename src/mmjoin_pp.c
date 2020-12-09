@@ -5,8 +5,8 @@
 #include "efika/core.h"
 
 #include "efika/apss/mmjoin.h"
-#include "efika/apss/export.h"
 #include "efika/apss/rename.h"
+#include "efika/core/export.h"
 #include "efika/core/gc.h"
 #include "efika/core/pp.h"
 
@@ -192,7 +192,7 @@ pp_free(
 /*----------------------------------------------------------------------------*/
 /*! Function to preprocess matrix for APSS. */
 /*----------------------------------------------------------------------------*/
-EFIKA_APSS_EXPORT int
+EFIKA_EXPORT int
 apss_mmjoin_pp(
   val_t const minsim,
   Matrix * const M
