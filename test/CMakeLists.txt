@@ -33,6 +33,7 @@ endif()
 # GoogleTest configuration
 #-------------------------------------------------------------------------------
 option(BUILD_GMOCK OFF)
+option(INSTALL_GTEST OFF)
 
 # Prevent GoogleTest from overriding our compiler/linker options when building
 # with Visual Studio
@@ -60,6 +61,5 @@ foreach(dep core data io)
 
   FetchContent_MakeAvailable(efika-${dep})
 
-  target_link_libraries(${PROJECT_NAME}-tests
-    PRIVATE Efika::${dep} $<$<NOT:$<STREQUAL:${dep},data>>:EfikaSDK::${dep}>)
+  target_link_libraries(${PROJECT_NAME}-tests PRIVATE Efika::${dep})
 endforeach()

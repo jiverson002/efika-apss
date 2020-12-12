@@ -1,0 +1,11 @@
+include(${CMAKE_CURRENT_LIST_DIR}/@component_NAME@-targets.cmake)
+
+include(CMakeFindDependencyMacro)
+
+foreach(dep @component_DEPS@)
+  find_dependency(${dep}
+    PATHS ${CMAKE_CURRENT_LIST_DIR})
+
+  target_link_libraries(@Library_NAME@::@library_NAME@-@component_NAME@
+    INTERFACE @Library_NAME@::@library_NAME@-${dep})
+endforeach()
