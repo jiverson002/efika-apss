@@ -17,6 +17,7 @@ struct pp_payld
 {
   Matrix I;
   ind_t *ka;
+  val_t *rowmax;
   val_t *pfxmax;
 };
 

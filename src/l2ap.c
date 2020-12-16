@@ -181,7 +181,7 @@ verify(
       continue;
 
     /* Anastasiu dot product */
-    for(ind_t jj = ka[k]; jj > ia[k]; jj--){
+    for (ind_t jj = ka[k]; jj > ia[k]; jj--) {
       ind_t const jjj = jj - 1;
       if (tmpspa[ja[jjj]] > 0.0) {
         s += tmpspa[ja[jjj]] * a[jjj];

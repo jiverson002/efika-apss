@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: MIT */
+#include <math.h>
 #include <string.h>
 
 #include "efika/apss.h"
@@ -16,23 +17,19 @@
 static inline ind_t
 filter_row(
   val_t const minsim,
+  val_t const mx,
   ind_t const n,
   ind_t const * const ja,
   val_t const * const a,
-  val_t const * const tmpmax
+  val_t const * const colmax
 )
 {
   ind_t j;
-  val_t b1 = 0.0, mx = 0.0;
-
-  /* compute row maximum */
-  for (ind_t j = 0; j < n; j++)
-    if (a[j] > mx)
-      mx = a[j];
+  val_t b1 = 0.0;
 
   for (j = 0; j < n && b1 < minsim; j++) {
     /* Bayardo bound */
-    b1 += a[j] * min(mx, tmpmax[ja[j]]);
+    b1 += a[j] * min(mx, colmax[ja[j]]);
   }
 
   /* return prefix split */
@@ -46,59 +43,39 @@ static int
 rfilt(
   val_t const minsim,
   ind_t const nr,
-  ind_t const nc,
   ind_t const * const ia,
   ind_t const * const ja,
   val_t const * const a,
-  ind_t       * const ka
-)
-{
-  /* ...garbage collected function... */
-  GC_func_init();
-
-  /* allocate scratch memory */
-  val_t * const tmpmax = GC_calloc(nc, sizeof(*tmpmax));
-
-  /* compute column maximums */
-  for (ind_t i = 0; i < nr; i++)
-    for(ind_t j = ia[i]; j < ia[i + 1]; j++)
-      if (a[j] > tmpmax[ja[j]])
-        tmpmax[ja[j]] = a[j];
-
-  /* find the prefixes in the matrix */
-  for (ind_t i = 0; i < nr; i++)
-    /* find prefix split for each row_i */
-    ka[i] = ia[i] + filter_row(minsim, ia[i + 1] - ia[i], ja + ia[i], a + ia[i],
-                               tmpmax);
-
-  /* free scratch memory */
-  GC_free(tmpmax);
-
-  return 0;
-}
-
-/*----------------------------------------------------------------------------*/
-/*! Precompute row prefixes. */
-/*----------------------------------------------------------------------------*/
-static int
-rstat(
-  ind_t const nr,
-  ind_t const * const ia,
-  ind_t const * const ja,
-  val_t const * const a,
-  ind_t const * const ka,
+  ind_t       * const ka,
+  val_t       * const rowmax,
+  val_t       * const colmax,
   val_t       * const pfxmax
 )
 {
-  /* compute prefix maximums */
+  /* compute column maximums */
   for (ind_t i = 0; i < nr; i++)
-    for(ind_t j = ia[i]; j < ka[i]; j++)
+    for (ind_t j = ia[i]; j < ia[i + 1]; j++)
+      if (a[j] > colmax[ja[j]])
+        colmax[ja[j]] = a[j];
+
+  /* find the prefixes in the matrix */
+  for (ind_t i = 0; i < nr; i++) {
+    /* compute row maximums */
+    for (ind_t j = ia[i]; j < ia[i + 1]; j++)
+      if (a[j] > rowmax[i])
+        rowmax[i] = a[j];
+
+    /* find prefix split for each row_i */
+    ka[i] = ia[i] + filter_row(minsim, rowmax[i], ia[i + 1] - ia[i], ja + ia[i],
+                               a + ia[i], colmax);
+
+    /* compute prefix maximums */
+    for (ind_t j = ia[i]; j < ka[i]; j++)
       if (a[j] > pfxmax[i])
         pfxmax[i] = a[j];
+  }
 
   return 0;
-
-  (void)ja;
 }
 
 /*----------------------------------------------------------------------------*/
@@ -195,6 +172,7 @@ pp_free(
   struct pp_payld * pp = (struct pp_payld *)ptr;
   Matrix_free(&(pp->I));
   free(pp->ka);
+  free(pp->rowmax);
   free(pp->pfxmax);
 }
 
@@ -241,18 +219,18 @@ apss_allpairs_pp(
 
   /* allocate other preprocessed data memory */
   ind_t * const ka = GC_malloc(nr * sizeof(*ka));
+  val_t * const rowmax = GC_calloc(nr, sizeof(*rowmax));
   val_t * const pfxmax = GC_calloc(nr, sizeof(*pfxmax));
+
+  /* allocate scratch memory */
+  val_t * const colmax = GC_calloc(nc, sizeof(*colmax));
 
   /* init /I/ */
   err = Matrix_init(I);
   GC_assert(!err);
 
-  /* precompute row prefixes */
-  err = rfilt(minsim, nr, nc, ia, ja, a, ka);
-  GC_assert(!err);
-
-  /* precompute row prefix statistics */
-  err = rstat(nr, ia, ja, a, ka, pfxmax);
+  /* precompute row prefixes and their statistics */
+  err = rfilt(minsim, nr, ia, ja, a, ka, rowmax, colmax, pfxmax);
   GC_assert(!err);
 
   /* precompute dynamic inverted index */
@@ -261,11 +239,15 @@ apss_allpairs_pp(
 
   /* record info in /pp/ */
   pp->ka = ka;
+  pp->rowmax = rowmax;
   pp->pfxmax = pfxmax;
 
   /* record payload in /M/ */
   M->pp = pp;
   M->pp_free = &pp_free;
+
+  /* free scratch memory */
+  GC_free(colmax);
 
   return 0;
 }

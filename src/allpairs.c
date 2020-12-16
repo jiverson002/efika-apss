@@ -41,22 +41,21 @@ generate(
   ind_t const * const restrict ja1,
   ind_t       * const restrict ra1,
   val_t const * const restrict a1,
+  val_t const * const restrict rowmax,
   ind_t       * const restrict marker,
-  val_t       * const restrict tmpmax,
+  val_t       * const restrict colmax,
   struct cand * const restrict tmpcnd
 )
 {
   ind_t cnt = 0;
-  val_t mx = 0.0, rs1 = 0.0, sz1 = 0.0;
+  val_t mx = 0.0, rs1 = 0.0;
 
   /* precompute the minimum size */
-  for (ind_t jj = ia[i]; jj < ia[i + 1]; jj++)
-    mx = max(mx, a[jj]);
-  sz1 = minsim / mx;
+  val_t const sz1 = minsim / rowmax[i];
 
   /* precompute maximum dot product */
   for (ind_t jj = ia[i]; jj < ia[i + 1]; jj++)
-    rs1 += a[jj] * tmpmax[ja[jj]];
+    rs1 += a[jj] * colmax[ja[jj]];
 
   /* iterate through each non-zero column, j, for this row */
   for (ind_t jj = ia[i + 1]; jj > ia[i]; jj--) {
@@ -71,11 +70,14 @@ generate(
       if (ia[ja1[ra1[j]] + 1] - ia[ja1[ra1[j]]] >= sz1)
         break;
 
+    /* ... */
+    rs1 -= v * colmax[j];
+
     /* iterate through the rows, k,  that have indexed column j */
     for (ind_t kk = ra1[j]; kk < ia1[j + 1]; kk++) {
       ind_t const k = ja1[kk];
       val_t const w = a1[kk];
-      ind_t const m = marker[k];
+      ind_t       m = marker[k];
 
       /* ignore candidates that come after i */
       if (k >= i)
@@ -83,18 +85,17 @@ generate(
 
       switch (m) {
         case UNKNOWN:
-        if (allow_unknown) {
-          /* initialize solution matrix entry */
-          tmpcnd[cnt].ind = k;
-          tmpcnd[cnt].sim = v * w;
+        if (!allow_unknown)
+          break;
 
-          /* populate marker */
-          marker[k] = cnt++;
+        /* initialize solution matrix entry */
+        tmpcnd[cnt].ind = k;
+        tmpcnd[cnt].sim = 0.0;
 
-          /* update global counter */
-          apss_nmacs1++;
-        }
-        break;
+        /* populate marker */
+        m = marker[k] = cnt++;
+
+        /* fall-through */
 
         default:
         /* update partial dot product for candidate row */
@@ -104,9 +105,6 @@ generate(
         apss_nmacs1++;
       }
     }
-
-    /* ... */
-    rs1 -= v * tmpmax[j];
   }
 
   return cnt;
@@ -124,6 +122,7 @@ verify(
   ind_t const * const restrict ja,
   ind_t const * const restrict ka,
   val_t const * const restrict a,
+  val_t const * const restrict rowmax,
   val_t const * const restrict pfxmax,
   ind_t       * const restrict marker,
   val_t       * const restrict tmpspa,
@@ -131,11 +130,7 @@ verify(
 )
 {
   ind_t ncnt = 0, len = ia[i + 1] - ia[i];
-  val_t mx = 0.0;
-
-  /* precompute the minimum size */
-  for (ind_t j = ia[i]; j < ia[i + 1]; j++)
-    mx = max(mx, a[j]);
+  val_t const mx = rowmax[i];
 
   BLAS_vsctr(ia[i + 1] - ia[i], a + ia[i], ja + ia[i], tmpspa);
 
@@ -151,10 +146,15 @@ verify(
       continue;
 
     /* compute the rest of the dot-product */
-    s += BLAS_vdoti(ka[k] - ia[k], a + ia[k], ja + ia[k], tmpspa);
+    for (ind_t jj = ka[k]; jj > ia[k]; jj--) {
+      ind_t const jjj = jj - 1;
+      if (tmpspa[ja[jjj]] > 0.0) {
+        s += tmpspa[ja[jjj]] * a[jjj];
 
-    /* update global counter */
-    apss_nmacs2 += (ka[k] - ia[k]);
+        /* update global counter */
+        apss_nmacs2++;
+      }
+    }
 
     /* retain only the cands that are at least minsim */
     if (s >= minsim) {
@@ -208,6 +208,7 @@ apss_allpairs(
   /* unpack /pp/ */
   Matrix const * const I    = &(pp->I);
   ind_t  const * const m_ka = pp->ka;
+  val_t  const * const rowmax = pp->rowmax;
   val_t  const * const pfxmax = pp->pfxmax;
 
   /* unpack /I/ */
@@ -225,7 +226,7 @@ apss_allpairs(
 
   /* allocate scratch memory */
   ind_t       * const marker = GC_malloc(m_nr * sizeof(*marker));
-  val_t       * const tmpmax = GC_calloc(m_nc, sizeof(*tmpmax));
+  val_t       * const colmax = GC_calloc(m_nc, sizeof(*colmax));
   val_t       * const tmpspa = GC_calloc(m_nc, sizeof(*tmpspa));
   struct cand * const tmpcnd = GC_malloc(m_nr * sizeof(*tmpcnd));
   ind_t       * const i_ra   = GC_malloc(i_nr * sizeof(*i_ra));
@@ -233,12 +234,6 @@ apss_allpairs(
   /* initialize marker with unchecked value */
   for (ind_t i = 0; i < m_nr; i++)
     marker[i] = UNKNOWN;
-
-  /* compute column maximums */
-  for (ind_t i = 0; i < m_nr; i++)
-    for(ind_t j = m_ia[i]; j < m_ia[i + 1]; j++)
-      if (m_a[j] > tmpmax[m_ja[j]])
-        tmpmax[m_ja[j]] = m_a[j];
 
   /* initialize ra1 */
   memcpy(i_ra, i_ia, i_nr * sizeof(*i_ra));
@@ -256,15 +251,20 @@ apss_allpairs(
   for (ind_t i = 0; i < m_nr; i++) {
     /* generate candidate vectors */
     ind_t const cnt = generate(minsim, i, m_ia, m_ja, m_a, i_ia, i_ja, i_ra,
-                               i_a, marker, tmpmax, tmpcnd);
+                               i_a, rowmax, marker, colmax, tmpcnd);
 
     /* verify candidate vectors */
-    ind_t const ncnt = verify(minsim, cnt, i, m_ia, m_ja, m_ka, m_a, pfxmax,
-                              marker, tmpspa, tmpcnd);
+    ind_t const ncnt = verify(minsim, cnt, i, m_ia, m_ja, m_ka, m_a, rowmax,
+                              pfxmax, marker, tmpspa, tmpcnd);
 
     /* update global counters */
     apss_ncand += cnt;
     apss_nsims += ncnt;
+
+    /* update column maximums */
+    for (ind_t j = m_ia[i]; j < m_ia[i + 1]; j++)
+      if (m_a[j] > colmax[m_ja[j]])
+        colmax[m_ja[j]] = m_a[j];
 
     /* _vector_ resize */
     if (nnz + ncnt >= cap) {
@@ -303,7 +303,7 @@ apss_allpairs(
 
   /* free scratch memory */
   GC_free(marker);
-  GC_free(tmpmax);
+  GC_free(colmax);
   GC_free(tmpspa);
   GC_free(tmpcnd);
   GC_free(i_ra);
